@@ -1,0 +1,36 @@
+# .gitignore for .NET Project
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Secrets and User specifics
+appsettings.Development.json
+data.json
+
+# Node modules (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation artifacts (AI folders)
+.gemini/
+.agents/
+.agent/
+_agents/
+_agent/
+brain/
+task.md
+implementation_plan.md
+walkthrough.md

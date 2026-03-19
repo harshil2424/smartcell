@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html class="h-full bg-[#0a0a0a]" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>SmartCell — Inventory Dashboard</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            'dashboard-bg': '#0a0a0a',
+            'sidebar-bg':   '#000000',
+            'card-bg':      '#111811',
+            'panel-bg':     '#121212',
+            'accent-green': '#32D583',
+            'accent-lime':  '#ADFF2F',
+            'accent-yellow':'#FFD700',
+            'accent-purple':'#8B5CF6',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+    .line-chart-svg { filter: drop-shadow(0 0 8px rgba(50,213,131,0.3)); }
+
+    @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .animate-spin-slow { animation: spin-slow 8s linear infinite; }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeInUp 0.5s ease both; }
+    .delay-1 { animation-delay: 0.05s; }
+    .delay-2 { animation-delay: 0.1s; }
+    .delay-3 { animation-delay: 0.15s; }
+    .delay-4 { animation-delay: 0.2s; }
+    .delay-5 { animation-delay: 0.25s; }
+    .delay-6 { animation-delay: 0.3s; }
+
+    /* Sidebar nav tooltip on hover */
+    .nav-item { position: relative; }
+    .nav-item .tooltip {
+      position: absolute; left: 58px; top: 50%; transform: translateY(-50%);
+      background: #1e1e1e; color: #e5e7eb; font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 8px; white-space: nowrap;
+      pointer-events: none; opacity: 0; transition: opacity 0.15s;
+      border: 1px solid rgba(255,255,255,0.07);
+      z-index: 100;
+    }
+    .nav-item:hover .tooltip { opacity: 1; }
+
+    /* Active nav pill */
+    .nav-active { background: rgba(50,213,131,0.15); color: #32D583; border-radius: 12px; }
+  </style>
+</head>
+
+<body class="h-full text-gray-300 font-sans selection:bg-accent-green selection:text-black">
+<div class="flex h-full overflow-hidden">
+
+  <!-- ═══════════════════════════════════════════════════════
+       SIDEBAR
+  ═══════════════════════════════════════════════════════ -->
+  <aside class="w-[70px] flex-shrink-0 bg-sidebar-bg flex flex-col items-center py-6 border-r border-gray-800/30 z-50">
+
+    <!-- Logo -->
+    <a href="index.html" class="mb-8">
+      <div class="w-10 h-10 bg-accent-green rounded-xl flex items-center justify-center shadow-lg shadow-accent-green/20">
+        <i data-lucide="box" class="w-5 h-5 text-black"></i>
+      </div>
+    </a>
+
+    <nav class="flex-1 flex flex-col items-center gap-1 w-full px-2">
+
+      <!-- Section label -->
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-1">Main</span>
+
+      <!-- Dashboard (active) -->
+      <a href="index.html" class="nav-item nav-active w-full flex justify-center p-2.5">
+        <i data-lucide="layout-grid" class="w-5 h-5"></i>
+        <span class="tooltip">Dashboard</span>
+      </a>
+
+      <!-- Section label -->
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Algorithms</span>
+
+      <!-- Hash Storage -->
+      <a href="hashing.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="database" class="w-5 h-5"></i>
+        <span class="tooltip">Hash Storage</span>
+      </a>
+
+      <!-- Item Finder -->
+      <a href="item-finder.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="search" class="w-5 h-5"></i>
+        <span class="tooltip">Item Finder</span>
+      </a>
+
+      <!-- Delivery Queue -->
+      <a href="queue.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+          <i data-lucide="list-ordered" class="w-5 h-5"></i>
+        <span class="tooltip">Delivery Queue</span>
+      </a>
+
+      <!-- Priority Scheduler -->
+      <a href="scheduler.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+          <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+        <span class="tooltip">Scheduler</span>
+      </a>
+
+      <!-- Section label -->
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Inventory</span>
+
+      <!-- Products -->
+      <a href="inventory.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package" class="w-5 h-5"></i>
+        <span class="tooltip">Products</span>
+      </a>
+
+      <!-- Add Item -->
+      <a href="add-item.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package-plus" class="w-5 h-5"></i>
+        <span class="tooltip">Add Item</span>
+      </a>
+
+      <!-- Orders -->
+      <a href="orders.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="receipt-text" class="w-5 h-5"></i>
+        <span class="tooltip">Orders</span>
+      </a>
+
+      <!-- Alerts -->
+      <a href="alerts.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="triangle-alert" class="w-5 h-5"></i>
+        <span class="tooltip">Low Stock Alerts</span>
+      </a>
+    </nav>
+
+    <!-- Bottom settings -->
+    <div class="flex flex-col items-center gap-3 mt-4">
+      <button class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+        <span class="tooltip">Settings</span>
+      </button>
+      <div class="w-9 h-9 rounded-xl overflow-hidden border-2 border-gray-800 cursor-pointer hover:border-accent-green/50 transition-colors">
+        <img src="https://api.dicebear.com/9.x/notionists/svg?seed=SmartCell" alt="User" class="w-full h-full object-cover" />
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN WRAPPER
+  ═══════════════════════════════════════════════════════ -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- ── TOP HEADER ──────────────────────────────────────── -->
+    <header class="h-16 flex-shrink-0 bg-sidebar-bg flex items-center justify-between px-8 border-b border-gray-800/30">
+      <div class="flex items-center space-x-6">
+        <button class="text-gray-500 hover:text-white transition-colors">
+          <i data-lucide="panel-left" class="w-5 h-5"></i>
+        </button>
+        <div class="relative group">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-accent-green transition-colors"></i>
+          <input type="text" placeholder="Search inventory..." class="bg-[#1a1a1a] border-none rounded-full py-2 pl-9 pr-4 text-sm w-60 focus:ring-1 focus:ring-accent-green/50 focus:bg-[#222] outline-none placeholder-gray-600" />
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Page breadcrumb -->
+        <span class="hidden md:flex items-center gap-2 text-xs text-gray-500">
+          <span>SmartCell</span>
+          <span class="text-gray-700">•</span>
+          <span class="bg-accent-green/10 text-accent-green px-3 py-0.5 rounded-full">Dashboard</span>
+        </span>
+
+        <div class="w-px h-5 bg-gray-800 hidden md:block"></div>
+
+        <button class="text-gray-500 hover:text-white transition-colors">
+          <i data-lucide="sun" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Notification bell -->
+        <button class="text-gray-500 hover:text-white transition-colors relative">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute -top-1 -right-1 bg-red-500 text-[9px] text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5">3</span>
+        </button>
+
+        <!-- Cart -->
+        <button class="text-gray-500 hover:text-white transition-colors relative">
+          <i data-lucide="shopping-basket" class="w-5 h-5"></i>
+          <span class="absolute -top-1 -right-1 bg-accent-green text-[9px] text-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 font-bold">7</span>
+        </button>
+
+        <!-- Avatar -->
+        <div class="w-9 h-9 rounded-xl overflow-hidden border border-gray-700 cursor-pointer hover:border-accent-green/50 transition-colors">
+          <img src="https://api.dicebear.com/9.x/notionists/svg?seed=SmartCell" alt="User" class="w-full h-full object-cover" />
+        </div>
+      </div>
+    </header>
+
+    <!-- ── MAIN CONTENT ────────────────────────────────────── -->
+    <main class="flex-1 overflow-y-auto p-7 bg-dashboard-bg space-y-7">
+
+      <!-- ── Page title bar ── -->
+      <div class="flex items-center justify-between fade-in">
+        <div>
+          <h1 class="text-xl font-bold text-white tracking-tight">Inventory Overview</h1>
+          <p class="text-xs text-gray-500 mt-0.5">Welcome back, Admin — here's what's happening today</p>
+        </div>
+        <button class="inline-flex items-center gap-2 bg-accent-green hover:bg-accent-green/90 text-black text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-lg shadow-accent-green/20">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          Add Item
+        </button>
+      </div>
+
+      <!-- ════════════════════════════════════════════════
+           ROW 1 — Top 3 Big KPI Cards  (cloned from dashboard-theme.html TopKPISection)
+      ════════════════════════════════════════════════ -->
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- Card: Total Stock Value -->
+        <div class="bg-panel-bg p-6 rounded-3xl relative overflow-hidden group border border-gray-800/50 fade-in delay-1">
+          <div class="z-10 relative">
+            <p class="text-gray-500 text-sm font-medium">Total Stock Value</p>
+            <h3 class="text-white text-base font-bold">SmartCell Warehouse</h3>
+          </div>
+          <div class="mt-4 z-10 relative">
+            <h2 id="stat-total-value" class="text-3xl font-bold text-white tracking-tight">₹0</h2>
+            <div class="flex items-center text-accent-green text-sm mt-1 gap-1">
+              <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+              <span>+18.3% this month</span>
+            </div>
+          </div>
+          <!-- Background SVG line chart -->
+          <div class="absolute bottom-0 right-0 left-0 h-20 overflow-hidden opacity-40 pointer-events-none">
+            <svg class="w-full h-full line-chart-svg" viewBox="0 0 400 80" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="kpi1grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" style="stop-color:#32D583;stop-opacity:0.4"/>
+                  <stop offset="100%" style="stop-color:#32D583;stop-opacity:0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,70 Q60,50 100,60 T180,30 T260,50 T340,20 T400,10 V80 H0 Z" fill="url(#kpi1grad)"/>
+              <path d="M0,70 Q60,50 100,60 T180,30 T260,50 T340,20 T400,10" fill="none" stroke="#32D583" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Card: Monthly Orders -->
+        <div class="bg-panel-bg p-6 rounded-3xl border border-gray-800/50 fade-in delay-2">
+          <div>
+            <p class="text-gray-500 text-sm font-medium">Monthly</p>
+            <h3 class="text-white text-base font-bold">Orders Received</h3>
+          </div>
+          <div class="mt-4 flex items-end justify-between">
+            <div>
+              <h2 id="stat-orders-count" class="text-3xl font-bold text-white tracking-tight">0</h2>
+              <p class="text-xs text-gray-500 mt-1">vs last month <span class="text-accent-green">+12.4%</span></p>
+            </div>
+            <!-- Mini bar chart -->
+            <div class="flex items-end space-x-1.5 h-12">
+              <div class="w-2 bg-gray-700 rounded-sm h-1/2"></div>
+              <div class="w-2 bg-accent-green rounded-sm h-2/3"></div>
+              <div class="w-2 bg-gray-700 rounded-sm h-1/3"></div>
+              <div class="w-2 bg-accent-green rounded-sm h-3/4"></div>
+              <div class="w-2 bg-gray-700 rounded-sm h-1/2"></div>
+              <div class="w-2 bg-accent-green rounded-sm h-full"></div>
+              <div class="w-2 bg-accent-green rounded-sm h-2/3"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card: Delivery Rate (lime accent card) -->
+        <div class="bg-accent-lime p-6 rounded-3xl flex flex-col justify-between fade-in delay-3">
+          <div class="flex justify-between">
+            <h3 class="text-black text-base font-bold leading-tight">Delivery<br/>Success Rate</h3>
+            <div class="bg-black/10 p-2 rounded-xl">
+              <i data-lucide="truck" class="w-5 h-5 text-black"></i>
+            </div>
+          </div>
+          <div>
+            <h2 class="text-3xl font-bold text-black tracking-tight">96.8%</h2>
+            <p class="text-sm text-black/60 mt-0.5">Compared to last month</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════
+           ROW 2 — 4 Secondary Stat Cards  (cloned from SecondaryStatSection)
+      ════════════════════════════════════════════════ -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <!-- Total Items in Stock -->
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-1">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Items in Stock</p>
+            <h4 id="stat-items-stock" class="text-2xl font-bold text-white mt-1">0</h4>
+            <div class="flex items-center mt-2 gap-1">
+              <span class="text-[10px] text-gray-500 uppercase">Updated now</span>
+              <span class="bg-accent-green/10 text-accent-green text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">+5.1%<i data-lucide="trending-up" class="w-3 h-3"></i></span>
+            </div>
+          </div>
+          <div class="p-3 bg-accent-green/10 rounded-full flex-shrink-0">
+            <i data-lucide="package" class="w-6 h-6 text-accent-green"></i>
+          </div>
+        </div>
+
+        <!-- Orders in Queue -->
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-2">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Orders in Queue</p>
+            <h4 id="stat-queue-count" class="text-2xl font-bold text-white mt-1">0</h4>
+            <div class="flex items-center mt-2 gap-1">
+              <span class="text-[10px] text-gray-500 uppercase">Pending</span>
+              <span class="bg-accent-yellow/10 text-accent-yellow text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">+8<i data-lucide="trending-up" class="w-3 h-3"></i></span>
+            </div>
+          </div>
+          <div class="p-3 bg-accent-yellow/10 rounded-full flex-shrink-0">
+            <i data-lucide="git-commit-horizontal" class="w-6 h-6 text-accent-yellow"></i>
+          </div>
+        </div>
+
+        <!-- Delivered Today -->
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-3">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Delivered Today</p>
+            <h4 id="stat-delivered-count" class="text-2xl font-bold text-white mt-1">0</h4>
+            <div class="flex items-center mt-2 gap-1">
+              <span class="text-[10px] text-gray-500 uppercase">Today</span>
+              <span class="bg-accent-green/10 text-accent-green text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">+22%<i data-lucide="trending-up" class="w-3 h-3"></i></span>
+            </div>
+          </div>
+          <div class="p-3 bg-accent-purple/10 rounded-full flex-shrink-0">
+            <i data-lucide="truck" class="w-6 h-6 text-accent-purple"></i>
+          </div>
+        </div>
+
+        <!-- Low Stock Alerts -->
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-4">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Low Stock Alerts</p>
+            <h4 id="stat-low-stock" class="text-2xl font-bold text-white mt-1">0</h4>
+            <div class="flex items-center mt-2 gap-1">
+              <span class="text-[10px] text-gray-500 uppercase">Items critical</span>
+              <span class="bg-red-500/10 text-red-500 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-0.5">+3<i data-lucide="trending-up" class="w-3 h-3"></i></span>
+            </div>
+          </div>
+          <div class="p-3 bg-red-500/10 rounded-full flex-shrink-0">
+            <i data-lucide="triangle-alert" class="w-6 h-6 text-red-500"></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════
+           ROW 3 — Charts Row  (cloned from ChartsSection)
+      ════════════════════════════════════════════════ -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Donut: Category Distribution (col-span-3) -->
+        <div class="lg:col-span-3 bg-panel-bg p-6 rounded-3xl border border-gray-800/50 fade-in delay-1">
+          <h3 class="text-base font-bold text-white mb-6">Category Split</h3>
+          <div class="relative w-40 h-40 mx-auto mb-8 flex items-center justify-center">
+            <svg class="w-full h-full -rotate-90">
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#1a1a1a" stroke-width="14"/>
+              <!-- Electronics 40% → 160/400 -->
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#32D583" stroke-dasharray="160 402" stroke-width="14"/>
+              <!-- Food 25% → 100/400 -->
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#FFD700" stroke-dasharray="100 402" stroke-dashoffset="-160" stroke-width="14"/>
+              <!-- Clothing 20% → 80/400 -->
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#8B5CF6" stroke-dasharray="80 402" stroke-dashoffset="-260" stroke-width="14"/>
+              <!-- Other 15% → 60/400 -->
+              <circle cx="80" cy="80" r="64" fill="none" stroke="#ADFF2F" stroke-dasharray="62 402" stroke-dashoffset="-340" stroke-width="14"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span class="text-gray-500 text-xs">Total</span>
+              <span id="stat-category-total" class="text-xl font-bold text-white">0</span>
+            </div>
+          </div>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2 text-xs"><span class="w-2 h-2 rounded-full bg-accent-green"></span>Electronics</span>
+              <span class="text-xs font-semibold text-white">1,456 <span class="text-accent-green text-[10px]">40%</span></span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2 text-xs"><span class="w-2 h-2 rounded-full bg-accent-yellow"></span>Food & Grocery</span>
+              <span class="text-xs font-semibold text-white">910 <span class="text-accent-yellow text-[10px]">25%</span></span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2 text-xs"><span class="w-2 h-2 rounded-full bg-accent-purple"></span>Clothing</span>
+              <span class="text-xs font-semibold text-white">728 <span class="text-accent-purple text-[10px]">20%</span></span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="flex items-center gap-2 text-xs"><span class="w-2 h-2 rounded-full bg-accent-lime"></span>Other</span>
+              <span class="text-xs font-semibold text-white">546 <span class="text-accent-lime text-[10px]">15%</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Area Chart: Stock Trend (col-span-6) -->
+        <div class="lg:col-span-6 bg-panel-bg p-6 rounded-3xl border border-gray-800/50 fade-in delay-2">
+          <div class="flex justify-between items-center mb-5">
+            <div>
+              <h3 class="text-base font-bold text-white">Stock Movement</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Daily inflow vs outflow</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="flex items-center gap-1.5 text-xs"><span class="w-3 h-0.5 inline-block bg-accent-green rounded"></span>Inflow</span>
+              <span class="flex items-center gap-1.5 text-xs"><span class="w-3 h-0.5 inline-block bg-accent-lime rounded" style="border-top:2px dashed #ADFF2F;height:0"></span>Outflow</span>
+              <select class="bg-[#1a1a1a] text-gray-300 border-gray-800 rounded-lg text-xs py-1 px-3 focus:ring-accent-green outline-none">
+                <option>This Week</option>
+                <option>Last Month</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex gap-8 mb-5">
+            <div>
+              <p class="text-gray-500 text-xs">Total Inflow</p>
+              <h4 class="text-2xl font-bold text-white">2,840</h4>
+            </div>
+            <div class="border-l border-gray-800 pl-8">
+              <p class="text-gray-500 text-xs">Total Outflow</p>
+              <h4 class="text-2xl font-bold text-white">1,952</h4>
+            </div>
+          </div>
+
+          <!-- SVG Area Chart -->
+          <div class="h-52 relative">
+            <div class="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[10px] text-gray-600 pb-4">
+              <span>600</span><span>450</span><span>300</span><span>150</span><span>0</span>
+            </div>
+            <div class="ml-8 h-full relative">
+              <!-- Grid lines -->
+              <div class="absolute inset-0 flex flex-col justify-between pb-4 pointer-events-none">
+                <div class="border-b border-gray-800/60 w-full"></div>
+                <div class="border-b border-gray-800/60 w-full"></div>
+                <div class="border-b border-gray-800/60 w-full"></div>
+                <div class="border-b border-gray-800/60 w-full"></div>
+                <div class="border-b border-gray-800/40 w-full"></div>
+              </div>
+              <svg class="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="inflow-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#32D583;stop-opacity:0.3"/>
+                    <stop offset="100%" style="stop-color:#32D583;stop-opacity:0"/>
+                  </linearGradient>
+                  <linearGradient id="outflow-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#ADFF2F;stop-opacity:0.15"/>
+                    <stop offset="100%" style="stop-color:#ADFF2F;stop-opacity:0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Inflow area -->
+                <path d="M0,170 C50,150 80,100 130,110 S230,60 280,80 S380,100 430,70 S520,40 600,50 V190 H0 Z" fill="url(#inflow-grad)"/>
+                <path d="M0,170 C50,150 80,100 130,110 S230,60 280,80 S380,100 430,70 S520,40 600,50" fill="none" stroke="#32D583" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <!-- Outflow area (dashed) -->
+                <path d="M0,180 C60,175 100,140 160,150 S250,130 310,145 S400,125 460,120 S540,100 600,115 V190 H0 Z" fill="url(#outflow-grad)"/>
+                <path d="M0,180 C60,175 100,140 160,150 S250,130 310,145 S400,125 460,120 S540,100 600,115" fill="none" stroke="#ADFF2F" stroke-width="2" stroke-dasharray="6 3" stroke-linecap="round"/>
+                <!-- Data points on inflow -->
+                <circle cx="130" cy="110" r="4" fill="#32D583" stroke="#0a0a0a" stroke-width="2"/>
+                <circle cx="280" cy="80" r="4" fill="#32D583" stroke="#0a0a0a" stroke-width="2"/>
+                <circle cx="430" cy="70" r="4" fill="#32D583" stroke="#0a0a0a" stroke-width="2"/>
+                <circle cx="600" cy="50" r="4" fill="#32D583" stroke="#0a0a0a" stroke-width="2"/>
+              </svg>
+              <!-- X axis labels -->
+              <div class="flex justify-between text-[10px] text-gray-600 px-1 mt-1">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Bar Chart (col-span-3) -->
+        <div class="lg:col-span-3 bg-panel-bg p-6 rounded-3xl border border-gray-800/50 fade-in delay-3">
+          <h3 class="text-base font-bold text-white mb-6">Daily Dispatch</h3>
+          <div class="flex items-end justify-between h-48 px-1 mb-4">
+            <!-- Each day bar -->
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:80px">
+                <div class="bg-accent-green" style="height:50%"></div>
+                <div class="bg-accent-lime" style="height:20%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">M</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:110px">
+                <div class="bg-accent-green" style="height:65%"></div>
+                <div class="bg-accent-lime" style="height:15%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">T</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:65px">
+                <div class="bg-accent-green" style="height:40%"></div>
+                <div class="bg-accent-lime" style="height:25%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">W</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:130px">
+                <div class="bg-accent-green" style="height:75%"></div>
+                <div class="bg-accent-lime" style="height:10%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">T</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:95px">
+                <div class="bg-accent-green" style="height:55%"></div>
+                <div class="bg-accent-lime" style="height:20%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">F</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:120px">
+                <div class="bg-accent-green" style="height:70%"></div>
+                <div class="bg-accent-lime" style="height:12%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">S</span>
+            </div>
+            <div class="flex flex-col items-center gap-1.5 flex-1">
+              <div class="w-3 bg-gray-800 rounded-sm flex flex-col-reverse overflow-hidden" style="height:85px">
+                <div class="bg-accent-green" style="height:45%"></div>
+                <div class="bg-accent-lime" style="height:18%"></div>
+              </div>
+              <span class="text-[10px] text-gray-600">S</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-center gap-5">
+            <span class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full bg-accent-lime"></span>Shipped</span>
+            <span class="flex items-center gap-1.5 text-[10px]"><span class="w-2 h-2 rounded-full bg-accent-green"></span>Delivered</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════
+           ROW 4 — Algorithm Quick-Access Cards + Recent Activity
+      ════════════════════════════════════════════════ -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Algorithm Quick-Access Cards (col-span-5) -->
+        <div class="lg:col-span-5 space-y-4 fade-in delay-1">
+          <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-widest">Algorithm Modules</h3>
+
+          <!-- Hash Storage Card -->
+          <a href="hashing.html" class="group flex items-center justify-between bg-panel-bg hover:bg-card-bg border border-gray-800/50 hover:border-accent-green/30 p-5 rounded-2xl transition-all cursor-pointer">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 bg-accent-green/10 rounded-xl flex items-center justify-center group-hover:bg-accent-green/20 transition-colors">
+                <i data-lucide="database" class="w-6 h-6 text-accent-green"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-white">Hash Storage</h4>
+                <p class="text-xs text-gray-500 mt-0.5">16-bucket hash table • 3,640 items stored</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-accent-green/10 text-accent-green px-2 py-1 rounded-full font-semibold">Active</span>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-gray-600 group-hover:text-accent-green transition-colors"></i>
+            </div>
+          </a>
+
+          <!-- Delivery Queue Card -->
+          <a href="queue.html" class="group flex items-center justify-between bg-panel-bg hover:bg-card-bg border border-gray-800/50 hover:border-accent-yellow/30 p-5 rounded-2xl transition-all cursor-pointer">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 bg-accent-yellow/10 rounded-xl flex items-center justify-center group-hover:bg-accent-yellow/20 transition-colors">
+                <i data-lucide="git-commit-horizontal" class="w-6 h-6 text-accent-yellow"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-white">Delivery Queue</h4>
+                <p class="text-xs text-gray-500 mt-0.5">FIFO ordering • 47 orders pending</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-accent-yellow/10 text-accent-yellow px-2 py-1 rounded-full font-semibold">47 Pending</span>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-gray-600 group-hover:text-accent-yellow transition-colors"></i>
+            </div>
+          </a>
+
+          <!-- Priority Scheduler Card -->
+          <a href="scheduler.html" class="group flex items-center justify-between bg-panel-bg hover:bg-card-bg border border-gray-800/50 hover:border-accent-purple/30 p-5 rounded-2xl transition-all cursor-pointer">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 bg-accent-purple/10 rounded-xl flex items-center justify-center group-hover:bg-accent-purple/20 transition-colors">
+                <i data-lucide="gantt-chart" class="w-6 h-6 text-accent-purple"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text="white">Priority Scheduler</h4>
+                <p class="text-xs text-gray-500 mt-0.5">SJF & Priority • Gantt chart visualizer</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-accent-purple/10 text-accent-purple px-2 py-1 rounded-full font-semibold">Run Sim</span>
+              <i data-lucide="arrow-right" class="w-4 h-4 text-gray-600 group-hover:text-accent-purple transition-colors"></i>
+            </div>
+          </a>
+        </div>
+
+        <!-- Recent Activity Table (col-span-7) -->
+        <div class="lg:col-span-7 bg-panel-bg rounded-3xl border border-gray-800/50 overflow-hidden fade-in delay-2">
+          <div class="flex items-center justify-between p-6 border-b border-gray-800/40">
+            <h3 class="text-base font-bold text-white">Recent Activity</h3>
+            <button class="text-xs text-accent-green hover:text-accent-lime transition-colors font-semibold">View All →</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="bg-white/3 border-b border-gray-800/40">
+                  <th class="px-6 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Action</th>
+                  <th class="px-6 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Item</th>
+                  <th class="px-6 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Qty</th>
+                  <th class="px-6 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Status</th>
+                  <th class="px-6 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Time</th>
+                </tr>
+              </thead>
+              <tbody id="activity-tbody" class="divide-y divide-gray-800/30">
+                <!-- Dynamic Activity -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- /main -->
+  </div><!-- /main wrapper -->
+</div><!-- /flex container -->
+
+<!-- Floating settings button -->
+<button class="fixed bottom-7 right-7 w-12 h-12 bg-emerald-900 hover:bg-emerald-800 rounded-xl text-white shadow-xl transition-all z-50 flex items-center justify-center">
+  <i data-lucide="settings" class="w-5 h-5 animate-spin-slow"></i>
+</button>
+
+<script type="module">
+  import { store } from './js/store.js';
+
+  function renderDashboard() {
+    const inventory = store.getInventory();
+    const orders = store.getOrders();
+    const queue = store.getQueue();
+    const activity = store.getRecentActivity();
+    const delivered = store.getDelivered();
+
+    // KPI 1: Stock Value
+    const totalValue = inventory.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    document.getElementById('stat-total-value').textContent = `₹${totalValue.toLocaleString('en-IN')}`;
+
+    // KPI 2: Total Orders
+    document.getElementById('stat-orders-count').textContent = orders.length.toLocaleString('en-IN');
+
+    // KPI 3: Stock Items
+    const totalQty = inventory.reduce((sum, item) => sum + item.qty, 0);
+    document.getElementById('stat-items-stock').textContent = totalQty.toLocaleString('en-IN');
+    document.getElementById('stat-category-total').textContent = totalQty.toLocaleString('en-IN');
+
+    // Secondary Stats
+    document.getElementById('stat-queue-count').textContent = queue.length;
+    document.getElementById('stat-delivered-count').textContent = delivered.length;
+    
+    const lowStockCount = inventory.filter(i => i.qty > 0 && i.qty < 10).length;
+    document.getElementById('stat-low-stock').textContent = lowStockCount;
+
+    // Recent Activity Table
+    const tbody = document.getElementById('activity-tbody');
+    if (activity.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-xs text-gray-700 italic">No activity recorded</td></tr>`;
+    } else {
+      tbody.innerHTML = activity.map(act => {
+        let icon = 'info';
+        let iconColor = 'text-blue-400';
+        let badgeColor = 'bg-blue-500/10 text-blue-400';
+
+        if (act.action === 'Added') { icon = 'plus-circle'; iconColor = 'text-accent-green'; badgeColor = 'bg-accent-green/10 text-accent-green'; }
+        if (act.action === 'Delivered') { icon = 'check-circle'; iconColor = 'text-accent-purple'; badgeColor = 'bg-accent-purple/10 text-accent-purple'; }
+        if (act.action === 'Dispatched') { icon = 'truck'; iconColor = 'text-accent-yellow'; badgeColor = 'bg-accent-yellow/10 text-accent-yellow'; }
+
+        return `
+          <tr class="hover:bg-accent-green/5 transition-colors">
+            <td class="px-6 py-4 text-sm">
+              <span class="flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i><span class="text-white font-medium">${act.action}</span></span>
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-400">${act.item}</td>
+            <td class="px-6 py-4 text-sm text-white font-semibold">${act.qty}</td>
+            <td class="px-6 py-4"><span class="inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeColor}">${act.status}</span></td>
+            <td class="px-6 py-4 text-xs text-gray-600">${act.time}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    if(window.lucide) window.lucide.createIcons();
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    store.initPromise.then(() => {
+        renderDashboard();
+    });
+    if(window.lucide) window.lucide.createIcons();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html class="h-full bg-[#0a0a0a]" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>SmartCell — Hash Storage</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+          colors: {
+            'dashboard-bg':'#0a0a0a','sidebar-bg':'#000000','card-bg':'#111811',
+            'panel-bg':'#121212','accent-green':'#32D583','accent-lime':'#ADFF2F',
+            'accent-blue':'#3B82F6','accent-purple':'#8B5CF6',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar{width:6px}
+    ::-webkit-scrollbar-track{background:#111}
+    ::-webkit-scrollbar-thumb{background:#333;border-radius:10px}
+    
+    .fade-in{animation:fadeInUp .45s ease both}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+    .nav-item{position:relative}
+    .nav-item .tooltip{
+      position:absolute;left:58px;top:50%;transform:translateY(-50%);
+      background:#1e1e1e;color:#e5e7eb;font-size:11px;font-weight:600;
+      padding:4px 10px;border-radius:8px;white-space:nowrap;
+      pointer-events:none;opacity:0;transition:opacity .15s;
+      border:1px solid rgba(255,255,255,.07);z-index:100
+    }
+    .nav-item:hover .tooltip{opacity:1}
+    .nav-active{background:rgba(50,213,131,.15);color:#32D583;border-radius:12px}
+
+    /* Hash Table Visuals */
+    .unit{
+      aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);
+      border-radius:16px;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position:relative;overflow:hidden;
+    }
+    .unit.active{
+      background:rgba(50,213,131,0.05);border-color:rgba(50,213,131,0.3);
+      box-shadow:0 0 20px rgba(50,213,131,0.1);
+    }
+    .unit.collision{
+        border-color: rgba(239, 68, 68, 0.4);
+        background: rgba(239, 68, 68, 0.05);
+    }
+    .hash-item{
+      animation:popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+    @keyframes popIn{from{opacity:0;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+
+    .code-box{
+        background: #0d0d0d;
+        border: 1px solid rgba(255,255,255,0.05);
+        border-radius: 12px;
+        font-family: 'JetBrains Mono', monospace;
+        padding: 12px;
+        font-size: 11px;
+    }
+  </style>
+</head>
+<body class="h-full text-gray-300 font-sans selection:bg-accent-green selection:text-black">
+<div class="flex h-full overflow-hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="w-[70px] flex-shrink-0 bg-sidebar-bg flex flex-col items-center py-6 border-r border-gray-800/30 z-50">
+    <a href="index.html" class="mb-8">
+      <div class="w-10 h-10 bg-accent-green rounded-xl flex items-center justify-center shadow-lg shadow-accent-green/20">
+        <i data-lucide="box" class="w-5 h-5 text-black"></i>
+      </div>
+    </a>
+    <nav class="flex-1 flex flex-col items-center gap-1 w-full px-2">
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-1">Main</span>
+      <a href="index.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="layout-grid" class="w-5 h-5"></i><span class="tooltip">Dashboard</span>
+      </a>
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Algorithms</span>
+      <a href="hashing.html" class="nav-item nav-active w-full flex justify-center p-2.5">
+        <i data-lucide="database" class="w-5 h-5"></i><span class="tooltip">Hash Storage</span>
+      </a>
+      <a href="item-finder.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="search" class="w-5 h-5"></i><span class="tooltip">Item Finder</span>
+      </a>
+      <a href="queue.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="list-ordered" class="w-5 h-5"></i><span class="tooltip">Delivery Queue</span>
+      </a>
+      <a href="scheduler.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="bar-chart-2" class="w-5 h-5"></i><span class="tooltip">Scheduler</span>
+      </a>
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Inventory</span>
+      <a href="inventory.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package" class="w-5 h-5"></i><span class="tooltip">Products</span>
+      </a>
+      <a href="add-item.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package-plus" class="w-5 h-5"></i><span class="tooltip">Add Item</span>
+      </a>
+      <a href="orders.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="receipt-text" class="w-5 h-5"></i><span class="tooltip">Orders</span>
+      </a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <header class="h-16 flex-shrink-0 bg-sidebar-bg flex items-center justify-between px-8 border-b border-gray-800/30">
+      <div class="flex items-center space-x-6">
+        <h1 class="text-sm font-bold text-white tracking-widest uppercase">Hash Storage Simulation</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="bg-accent-green/10 text-accent-green px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase">Active Store</div>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-8 bg-dashboard-bg">
+      <div class="max-w-6xl mx-auto space-y-8">
+        
+        <!-- INTRO -->
+        <div class="fade-in">
+          <h2 class="text-2xl font-bold text-white tracking-tight">Inventory Data Indexing</h2>
+          <p class="text-gray-500 text-sm mt-1">Visualize how inventory items are mapped to memory locations using hashing algorithms.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          <!-- CONTROLS -->
+          <div class="space-y-6 fade-in" style="animation-delay: 0.1s">
+            <div class="bg-panel-bg border border-gray-800/50 rounded-3xl p-6">
+              <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Input Data</h3>
+              <div class="space-y-4">
+                <div>
+                  <label class="block text-[10px] font-bold text-gray-600 uppercase mb-2">Select Item to Hash</label>
+                  <select id="itemSelect" class="w-full bg-[#1a1a1a] border-gray-800 border rounded-xl py-3 px-4 text-sm text-white focus:ring-1 focus:ring-accent-green/50 outline-none transition-all">
+                    <!-- Loaded dynamically -->
+                  </select>
+                </div>
+                <button onclick="performHash()" class="w-full bg-accent-green hover:bg-accent-green/90 text-black py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-accent-green/20 flex items-center justify-center gap-2">
+                  <i data-lucide="zap" class="w-4 h-4 text-black"></i> Hash & Store
+                </button>
+                <div class="pt-2">
+                    <button onclick="clearTable()" class="w-full border border-gray-800 hover:bg-white/5 text-gray-500 hover:text-white py-2 rounded-xl text-xs transition-all tracking-wider font-semibold">Clear Hash Table</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-panel-bg border border-gray-800/50 rounded-3xl p-6">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Hashing Logic</h3>
+                <div class="space-y-3">
+                    <p class="text-[11px] text-gray-400 leading-relaxed">We use a simple <b>Sum of ASCII % Table Size</b> function to simulate memory address calculation.</p>
+                    <div class="code-box">
+                        <span class="text-blue-400">hash</span> = (∑ <span class="text-purple-400">ascii_values</span>) % 13;
+                    </div>
+                    <p class="text-[11px] text-gray-500 italic">Collision handling: Linear Probing (next available unit).</p>
+                </div>
+            </div>
+          </div>
+
+          <!-- VISUALIZATION GRID -->
+          <div class="lg:col-span-2 space-y-6 fade-in" style="animation-delay: 0.2s">
+            <div class="bg-panel-bg border border-gray-800/50 rounded-3xl p-8">
+              <div class="flex items-center justify-between mb-8">
+                <div>
+                  <h3 class="text-lg font-bold text-white">Storage Units</h3>
+                  <p class="text-[10px] text-gray-600 uppercase tracking-widest font-bold">Size: 13 (Prime)</p>
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-accent-green"></span>
+                        <span class="text-[10px] text-gray-500 font-bold uppercase">Success</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                        <span class="text-[10px] text-gray-500 font-bold uppercase">Collision</span>
+                    </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" id="unitGrid">
+                <!-- Generated by JS -->
+              </div>
+            </div>
+
+            <!-- LOG -->
+            <div class="bg-panel-bg border border-gray-800/50 rounded-3xl p-6 h-64 flex flex-col">
+              <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Hash Trace Log</h3>
+              <div id="hashLog" class="flex-1 overflow-y-auto space-y-2 text-[11px] font-mono text-gray-500">
+                <p>> System ready for hashing...</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script type="module">
+  import { store } from './js/store.js';
+
+  const TABLE_SIZE = 13;
+  let hashTable = new Array(TABLE_SIZE).fill(null);
+  const unitGrid = document.getElementById('unitGrid');
+  const logEl = document.getElementById('hashLog');
+
+  function init() {
+    // Load persisted table
+    if (store.data.hashingTable && store.data.hashingTable.length === TABLE_SIZE) {
+        const inventory = store.getInventory();
+        hashTable = store.data.hashingTable.map(id => {
+            if (id === null) return null;
+            return inventory.find(it => it.id == id) || null;
+        });
+    }
+    renderUnits();
+    loadItems();
+    if(window.lucide) window.lucide.createIcons();
+  }
+
+  function renderUnits() {
+    unitGrid.innerHTML = hashTable.map((item, i) => `
+      <div class="unit group" id="unit-${i}">
+        <span class="absolute top-2 left-2 text-[9px] font-mono text-gray-700">${i}</span>
+        ${item ? `
+          <button onclick="emptyUnit(${i})" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-md">
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+          <div class="hash-item text-center px-2">
+            <p class="text-[10px] font-bold text-accent-green truncate w-full">${item.name}</p>
+            <p class="text-[8px] text-gray-600 mt-0.5">${item.sku}</p>
+          </div>
+        ` : `
+          <i data-lucide="box-select" class="w-4 h-4 text-gray-800 opacity-20"></i>
+        `}
+      </div>
+    `).join('');
+    if(window.lucide) window.lucide.createIcons();
+  }
+
+  function loadItems() {
+    store.initPromise.then(() => {
+      const items = store.getInventory();
+      const select = document.getElementById('itemSelect');
+      select.innerHTML = items.map(it => `<option value="${it.id}">${it.name} (${it.sku})</option>`).join('');
+    });
+  }
+
+  window.performHash = function() {
+    const id = document.getElementById('itemSelect').value;
+    const items = store.getInventory();
+    const item = items.find(it => it.id == id);
+    if (!item) return;
+
+    // Calculation Step
+    const key = item.name;
+    let asciiSum = 0;
+    for(let i=0; i<key.length; i++) asciiSum += key.charCodeAt(i);
+    
+    let initialIndex = asciiSum % TABLE_SIZE;
+    let actualIndex = initialIndex;
+    let collisionDetected = false;
+
+    addLog(`Hashing "${key}"...`);
+    addLog(`> ASCII Sum: ${asciiSum}`);
+    addLog(`> (Sum % ${TABLE_SIZE}) = ${initialIndex}`);
+
+    // Linear Probing
+    let steps = 0;
+    while(hashTable[actualIndex] !== null && steps < TABLE_SIZE) {
+        if (!collisionDetected) {
+            collisionDetected = true;
+            addLog(`<span class="text-red-500">! Collision at unit ${actualIndex}</span>`);
+        }
+        actualIndex = (actualIndex + 1) % TABLE_SIZE;
+        steps++;
+        addLog(`> Probing unit ${actualIndex}...`);
+    }
+
+    if(steps >= TABLE_SIZE) {
+        addLog(`<span class="text-red-400">❌ Error: Hash table is full!</span>`);
+        return;
+    }
+
+    // Success
+    hashTable[actualIndex] = item;
+    store.updateHashingUnit(actualIndex, item.id); // Persistent
+    renderUnits();
+    
+    // Animate active unit
+    const unitEl = document.getElementById(`unit-${actualIndex}`);
+    unitEl.classList.add('active');
+    if (collisionDetected) {
+        unitEl.classList.add('collision');
+        addLog(`<span class="text-accent-blue">✓ Stored at unit ${actualIndex} after linear probing.</span>`);
+    } else {
+        addLog(`<span class="text-accent-green">✓ Stored successfully at unit ${actualIndex}.</span>`);
+    }
+
+    setTimeout(() => {
+        if (unitEl) unitEl.classList.remove('active', 'collision');
+    }, 2000);
+  };
+
+  window.emptyUnit = async function(index) {
+      if (hashTable[index]) {
+          addLog(`Emptying unit ${index}...`);
+          hashTable[index] = null;
+          await store.updateHashingUnit(index, null);
+          renderUnits();
+      }
+  };
+
+  window.clearTable = async function() {
+    addLog(`Clearing entire storage table...`);
+    hashTable = new Array(TABLE_SIZE).fill(null);
+    await store.clearHashingTable();
+    renderUnits();
+    logEl.innerHTML = '<p>> Table cleared.</p>';
+    addLog('System ready.');
+  }
+
+  function addLog(msg) {
+    const p = document.createElement('p');
+    p.innerHTML = `> ${msg}`;
+    logEl.prepend(p);
+  }
+
+  store.initPromise.then(init);
+</script>
+
+</body>
+</html>

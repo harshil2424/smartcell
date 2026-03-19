@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html class="h-full bg-[#0a0a0a]" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>SmartCell — Scheduler</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] },
+          colors: {
+            'dashboard-bg':'#0a0a0a','sidebar-bg':'#000000','card-bg':'#111811',
+            'panel-bg':'#121212','accent-green':'#32D583','accent-lime':'#ADFF2F',
+            'accent-yellow':'#FFD700','accent-purple':'#8B5CF6',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    ::-webkit-scrollbar{width:6px}
+    ::-webkit-scrollbar-track{background:#111}
+    ::-webkit-scrollbar-thumb{background:#333;border-radius:10px}
+    ::-webkit-scrollbar-thumb:hover{background:#444}
+
+    @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .animate-spin-slow{animation:spin-slow 8s linear infinite}
+
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeInUp .45s ease both}
+    .delay-1{animation-delay:.05s}.delay-2{animation-delay:.1s}
+    .delay-3{animation-delay:.15s}.delay-4{animation-delay:.2s}
+
+    /* Sidebar */
+    .nav-item{position:relative}
+    .nav-item .tooltip{
+      position:absolute;left:58px;top:50%;transform:translateY(-50%);
+      background:#1e1e1e;color:#e5e7eb;font-size:11px;font-weight:600;
+      padding:4px 10px;border-radius:8px;white-space:nowrap;
+      pointer-events:none;opacity:0;transition:opacity .15s;
+      border:1px solid rgba(255,255,255,.07);z-index:100
+    }
+    .nav-item:hover .tooltip{opacity:1}
+    .nav-active{background:rgba(50,213,131,.15);color:#32D583;border-radius:12px}
+
+    /* Modal */
+    .modal-backdrop{
+      position:fixed;inset:0;background:rgba(0,0,0,.8);
+      backdrop-filter:blur(5px);z-index:200;
+      display:flex;align-items:center;justify-content:center
+    }
+    .modal-backdrop.hidden{display:none}
+
+    /* Gantt chart */
+    .gantt-wrap{overflow-x:auto;padding-bottom:4px}
+    .gantt-row{display:flex;align-items:center;height:36px;gap:0}
+    .gantt-cell{
+      height:100%;display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:700;border-radius:6px;
+      border:1px solid rgba(0,0,0,.3);cursor:default;
+      transition:filter .15s;min-width:24px;
+    }
+    .gantt-cell:hover{filter:brightness(1.3)}
+    @keyframes ganttIn{
+      from{opacity:0;transform:scaleX(0);transform-origin:left}
+      to{opacity:1;transform:scaleX(1);transform-origin:left}
+    }
+    .gantt-cell{animation:ganttIn .35s cubic-bezier(.34,1.56,.64,1) both}
+
+    /* Algorithm toggle */
+    .algo-tab{
+      padding:6px 18px;border-radius:10px;font-size:12px;font-weight:600;
+      border:1px solid rgba(255,255,255,.08);color:#6b7280;cursor:pointer;
+      transition:all .2s
+    }
+    .algo-tab.active{
+      background:rgba(50,213,131,.15);color:#32D583;
+      border-color:rgba(50,213,131,.35)
+    }
+
+    /* Process table row */
+    .proc-row{transition:background .15s}
+    .proc-row:hover{background:rgba(50,213,131,.04)}
+
+    /* Status dots */
+    .dot-waiting  {background:#6b7280}
+    .dot-running  {background:#32D583;box-shadow:0 0 6px #32D583}
+    .dot-done     {background:#ADFF2F}
+    .dot-idle     {background:#1f2937}
+
+    /* Toast */
+    #toast{
+      position:fixed;bottom:88px;right:28px;
+      background:#121212;border:1px solid rgba(50,213,131,.3);
+      color:#d1d5db;font-size:13px;font-weight:500;
+      padding:12px 18px;border-radius:14px;z-index:300;
+      display:flex;align-items:center;gap:8px;
+      transform:translateY(20px);opacity:0;
+      transition:all .3s cubic-bezier(.34,1.56,.64,1);
+      box-shadow:0 8px 32px rgba(0,0,0,.5);pointer-events:none
+    }
+    #toast.show{transform:translateY(0);opacity:1}
+    #toast .tdot{width:8px;height:8px;border-radius:50%;background:#32D583;flex-shrink:0}
+
+    /* Process color palette (10 colors) */
+    .pc-0{background:#32D583;color:#000}
+    .pc-1{background:#8B5CF6;color:#fff}
+    .pc-2{background:#FFD700;color:#000}
+    .pc-3{background:#f97316;color:#000}
+    .pc-4{background:#06b6d4;color:#000}
+    .pc-5{background:#ec4899;color:#fff}
+    .pc-6{background:#84cc16;color:#000}
+    .pc-7{background:#a855f7;color:#fff}
+    .pc-8{background:#14b8a6;color:#000}
+    .pc-9{background:#fb923c;color:#000}
+
+    /* Timeline ruler */
+    .timeline-ruler{display:flex;border-top:1px solid rgba(255,255,255,.07);margin-top:4px}
+    .timeline-tick{
+      flex:0 0 24px;text-align:center;font-size:9px;
+      color:#4b5563;padding-top:3px;position:relative
+    }
+    .timeline-tick::before{
+      content:'';position:absolute;top:0;left:50%;
+      width:1px;height:6px;background:rgba(255,255,255,.1)
+    }
+  </style>
+</head>
+<body class="h-full text-gray-300 font-sans selection:bg-accent-green selection:text-black">
+<div class="flex h-full overflow-hidden">
+
+  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <aside class="w-[70px] flex-shrink-0 bg-sidebar-bg flex flex-col items-center py-6 border-r border-gray-800/30 z-50">
+    <a href="index.html" class="mb-8">
+      <div class="w-10 h-10 bg-accent-green rounded-xl flex items-center justify-center shadow-lg shadow-accent-green/20">
+        <i data-lucide="box" class="w-5 h-5 text-black"></i>
+      </div>
+    </a>
+    <nav class="flex-1 flex flex-col items-center gap-1 w-full px-2">
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-1">Main</span>
+      <a href="index.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="layout-grid" class="w-5 h-5"></i><span class="tooltip">Dashboard</span>
+      </a>
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Algorithms</span>
+      <a href="hashing.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="database" class="w-5 h-5"></i><span class="tooltip">Hash Storage</span>
+      </a>
+      <a href="item-finder.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="search" class="w-5 h-5"></i><span class="tooltip">Item Finder</span>
+      </a>
+      <a href="queue.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="list-ordered" class="w-5 h-5"></i><span class="tooltip">Delivery Queue</span>
+      </a>
+      <!-- ACTIVE -->
+      <a href="scheduler.html" class="nav-item nav-active w-full flex justify-center p-2.5">
+        <i data-lucide="bar-chart-2" class="w-5 h-5"></i><span class="tooltip">Scheduler</span>
+      </a>
+      <span class="text-[9px] text-gray-700 uppercase font-bold tracking-widest mb-2 mt-4">Inventory</span>
+      <a href="inventory.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package" class="w-5 h-5"></i><span class="tooltip">Products</span>
+      </a>
+      <a href="add-item.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="package-plus" class="w-5 h-5"></i><span class="tooltip">Add Item</span>
+      </a>
+      <a href="orders.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="receipt-text" class="w-5 h-5"></i><span class="tooltip">Orders</span>
+      </a>
+      <a href="alerts.html" class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="triangle-alert" class="w-5 h-5"></i><span class="tooltip">Low Stock Alerts</span>
+      </a>
+    </nav>
+    <div class="flex flex-col items-center gap-3 mt-4">
+      <button class="nav-item w-full flex justify-center p-2.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
+        <i data-lucide="settings" class="w-5 h-5"></i><span class="tooltip">Settings</span>
+      </button>
+      <div class="w-9 h-9 rounded-xl overflow-hidden border-2 border-gray-800 cursor-pointer hover:border-accent-green/50 transition-colors">
+        <img src="https://api.dicebear.com/9.x/notionists/svg?seed=SmartCell" alt="User" class="w-full h-full object-cover"/>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <div class="flex-1 flex flex-col overflow-hidden">
+
+    <!-- HEADER -->
+    <header class="h-16 flex-shrink-0 bg-sidebar-bg flex items-center justify-between px-8 border-b border-gray-800/30">
+      <div class="flex items-center space-x-6">
+        <button class="text-gray-500 hover:text-white transition-colors"><i data-lucide="panel-left" class="w-5 h-5"></i></button>
+        <div class="relative group">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-accent-green transition-colors"></i>
+          <input type="text" placeholder="Search process..." class="bg-[#1a1a1a] border-none rounded-full py-2 pl-9 pr-4 text-sm w-60 focus:ring-1 focus:ring-accent-green/50 focus:bg-[#222] outline-none placeholder-gray-600"/>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <span class="hidden md:flex items-center gap-2 text-xs text-gray-500">
+          <span>SmartCell</span><span class="text-gray-700">•</span>
+          <span class="bg-accent-green/10 text-accent-green px-3 py-0.5 rounded-full">Scheduler</span>
+        </span>
+        <div class="w-px h-5 bg-gray-800 hidden md:block"></div>
+        <button class="text-gray-500 hover:text-white transition-colors"><i data-lucide="sun" class="w-5 h-5"></i></button>
+        <button class="text-gray-500 hover:text-white transition-colors relative">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          <span class="absolute -top-1 -right-1 bg-red-500 text-[9px] text-white rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5">3</span>
+        </button>
+        <button class="text-gray-500 hover:text-white transition-colors relative">
+          <i data-lucide="shopping-basket" class="w-5 h-5"></i>
+          <span class="absolute -top-1 -right-1 bg-accent-green text-[9px] text-black rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5 font-bold">7</span>
+        </button>
+        <div class="w-9 h-9 rounded-xl overflow-hidden border border-gray-700 cursor-pointer hover:border-accent-green/50 transition-colors">
+          <img src="https://api.dicebear.com/9.x/notionists/svg?seed=SmartCell" alt="User" class="w-full h-full object-cover"/>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="flex-1 overflow-y-auto p-7 bg-dashboard-bg space-y-7">
+
+      <!-- PAGE TITLE -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 fade-in">
+        <div>
+          <h1 class="text-xl font-bold text-white tracking-tight">Order Delivery Scheduler</h1>
+          <p class="text-xs text-gray-500 mt-0.5">Schedule delivery orders using CPU scheduling algorithms</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <!-- Algorithm selector -->
+          <div class="flex items-center gap-2 bg-panel-bg border border-gray-800/60 p-1.5 rounded-xl">
+            <button id="tab-sjf" class="algo-tab active" onclick="setAlgo('sjf')">SJF</button>
+            <button id="tab-priority" class="algo-tab" onclick="setAlgo('priority')">Priority</button>
+          </div>
+          <button onclick="runScheduler()" class="inline-flex items-center gap-2 bg-accent-green hover:bg-accent-green/90 text-black text-sm font-bold px-4 py-2 rounded-xl transition-colors shadow-lg shadow-accent-green/20">
+            <i data-lucide="play" class="w-4 h-4"></i>Run Schedule
+          </button>
+          <button onclick="openAddModal()" class="inline-flex items-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i>Add Process
+          </button>
+        </div>
+      </div>
+
+      <!-- STAT CARDS -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-1">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Total Orders</p>
+            <h4 class="text-2xl font-bold text-white mt-1" id="stat-total">0</h4>
+            <p class="text-[10px] text-gray-600 mt-1">In queue</p>
+          </div>
+          <div class="p-3 bg-accent-green/10 rounded-full">
+            <i data-lucide="layers" class="w-6 h-6 text-accent-green"></i>
+          </div>
+        </div>
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-2">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Avg. Waiting</p>
+            <h4 class="text-2xl font-bold text-white mt-1"><span id="stat-awt">—</span><span class="text-sm text-gray-500 ml-1">u</span></h4>
+            <p class="text-[10px] text-gray-600 mt-1">Time units</p>
+          </div>
+          <div class="p-3 bg-accent-yellow/10 rounded-full">
+            <i data-lucide="clock" class="w-6 h-6 text-accent-yellow"></i>
+          </div>
+        </div>
+        <div class="bg-panel-bg p-5 rounded-2xl flex items-center justify-between border border-gray-800/50 fade-in delay-3">
+          <div>
+            <p class="text-gray-500 text-xs font-medium uppercase tracking-wider">Avg. Turnaround</p>
+            <h4 class="text-2xl font-bold text-white mt-1"><span id="stat-att">—</span><span class="text-sm text-gray-500 ml-1">u</span></h4>
+            <p class="text-[10px] text-gray-600 mt-1">Time units</p>
+          </div>
+          <div class="p-3 bg-accent-purple/10 rounded-full">
+            <i data-lucide="timer" class="w-6 h-6 text-accent-purple"></i>
+          </div>
+        </div>
+        <div class="bg-accent-lime p-5 rounded-2xl flex items-center justify-between fade-in delay-4">
+          <div>
+            <p class="text-black/60 text-xs font-medium uppercase tracking-wider">Algorithm</p>
+            <h4 class="text-2xl font-bold text-black mt-1" id="stat-algo">SJF</h4>
+            <p class="text-[10px] text-black/60 mt-1">Non-preemptive</p>
+          </div>
+          <div class="p-3 bg-black/10 rounded-full">
+            <i data-lucide="cpu" class="w-6 h-6 text-black"></i>
+          </div>
+        </div>
+      </section>
+
+      <!-- TWO COLUMN LAYOUT: Process Table | Algorithm Info -->
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+        <!-- Process Table (2/3 width) -->
+        <div class="xl:col-span-2 bg-panel-bg rounded-3xl border border-gray-800/50 overflow-hidden fade-in delay-1">
+          <div class="flex items-center justify-between p-5 border-b border-gray-800/40">
+            <div>
+              <h3 class="font-bold text-white text-sm">Process Queue</h3>
+              <p class="text-[10px] text-gray-600 mt-0.5">Each row = one delivery order to schedule</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="clearAll()" class="text-xs text-gray-600 hover:text-red-400 transition-colors">Clear All</button>
+              <button onclick="loadSample()" class="text-xs text-accent-green/70 hover:text-accent-green transition-colors ml-3">Load Sample</button>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="border-b border-gray-800/40">
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Process</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center">Date (Arrival)</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center">Distance (Burst)</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center" id="pri-col-hdr">Priority</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center">Wait</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center">TAT</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-gray-500 text-center">Finish</th>
+                  <th class="px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-accent-green text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="procBody" class="divide-y divide-gray-800/30">
+                <tr><td colspan="8" class="px-5 py-10 text-center text-xs text-gray-700 italic">No processes — click "Add Process" or "Load Sample"</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Algorithm Info Panel (1/3 width) -->
+        <div class="flex flex-col gap-5">
+          <!-- Info card -->
+          <div class="bg-panel-bg rounded-3xl border border-gray-800/50 p-5 fade-in delay-2">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-9 h-9 bg-accent-green/10 rounded-xl flex items-center justify-center">
+                <i data-lucide="info" class="w-5 h-5 text-accent-green"></i>
+              </div>
+              <div>
+                <h3 class="font-bold text-white text-sm" id="info-title">SJF (Shortest Job First)</h3>
+                <p class="text-[10px] text-gray-500">Non-preemptive</p>
+              </div>
+            </div>
+            <p class="text-xs text-gray-400 leading-relaxed" id="info-desc">
+              Processes are scheduled in order of <span class="text-accent-green font-semibold">ascending burst time</span>. 
+              Among processes arriving at the same time, the one with the smallest burst is picked first.
+              SJF minimizes average waiting time for a given set of processes.
+            </p>
+            <div class="mt-4 space-y-2" id="info-steps">
+              <div class="flex items-start gap-2 text-xs text-gray-500">
+                <span class="w-4 h-4 mt-0.5 rounded-full bg-accent-green/10 text-accent-green text-[9px] font-bold flex items-center justify-center flex-shrink-0">1</span>
+                Sort by arrival time, break ties by burst time
+              </div>
+              <div class="flex items-start gap-2 text-xs text-gray-500">
+                <span class="w-4 h-4 mt-0.5 rounded-full bg-accent-green/10 text-accent-green text-[9px] font-bold flex items-center justify-center flex-shrink-0">2</span>
+                Pick the available process with smallest burst
+              </div>
+              <div class="flex items-start gap-2 text-xs text-gray-500">
+                <span class="w-4 h-4 mt-0.5 rounded-full bg-accent-green/10 text-accent-green text-[9px] font-bold flex items-center justify-center flex-shrink-0">3</span>
+                Execute fully before scheduling next
+              </div>
+            </div>
+          </div>
+
+          <!-- Formula card -->
+          <div class="bg-panel-bg rounded-3xl border border-gray-800/50 p-5 fade-in delay-3">
+            <h3 class="font-bold text-white text-sm mb-4">Formulas</h3>
+            <div class="space-y-3">
+              <div class="bg-[#0d1a12] border border-accent-green/15 rounded-xl p-3">
+                <p class="text-[10px] text-gray-500 mb-1">Completion Time</p>
+                <p class="font-mono text-xs text-accent-green">CT = Start + Burst</p>
+              </div>
+              <div class="bg-[#0d1a12] border border-accent-green/15 rounded-xl p-3">
+                <p class="text-[10px] text-gray-500 mb-1">Turnaround Time</p>
+                <p class="font-mono text-xs text-accent-green">TAT = CT − Arrival</p>
+              </div>
+              <div class="bg-[#0d1a12] border border-accent-green/15 rounded-xl p-3">
+                <p class="text-[10px] text-gray-500 mb-1">Waiting Time</p>
+                <p class="font-mono text-xs text-accent-green">WT = TAT − Burst</p>
+              </div>
+              <div class="bg-[#0d1218] border border-accent-purple/15 rounded-xl p-3">
+                <p class="text-[10px] text-gray-500 mb-1">Avg. Waiting Time</p>
+                <p class="font-mono text-xs text-accent-purple">AWT = Σ(WT) / n</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GANTT CHART -->
+      <div class="bg-panel-bg rounded-3xl border border-gray-800/50 fade-in delay-2">
+        <div class="flex items-center justify-between p-5 border-b border-gray-800/40">
+          <div>
+            <h3 class="font-bold text-white text-sm">Gantt Chart</h3>
+            <p class="text-[10px] text-gray-600 mt-0.5">Visual execution timeline — click "Run Schedule" to generate</p>
+          </div>
+          <div id="gantt-legend" class="flex items-center flex-wrap gap-3"></div>
+        </div>
+        <div class="p-6">
+          <div id="gantt-empty" class="flex flex-col items-center justify-center py-12 text-gray-700 gap-3">
+            <i data-lucide="bar-chart-horizontal" class="w-10 h-10 opacity-30"></i>
+            <p class="text-sm italic">Add processes and click "Run Schedule" to see the Gantt chart</p>
+          </div>
+          <div id="gantt-container" class="hidden space-y-3">
+            <!-- Rows rendered by JS -->
+            <div id="gantt-rows" class="gantt-wrap space-y-1.5"></div>
+            <!-- Timeline ruler -->
+            <div id="gantt-ruler" class="gantt-wrap timeline-ruler"></div>
+            <!-- Stats row -->
+            <div id="gantt-stats" class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXECUTION STEP LOG -->
+      <div class="bg-panel-bg rounded-3xl border border-gray-800/50 overflow-hidden fade-in delay-3">
+        <div class="flex items-center justify-between p-5 border-b border-gray-800/40">
+          <h3 class="font-bold text-white text-sm">Execution Step Log</h3>
+          <span id="algo-badge" class="bg-accent-green/10 text-accent-green text-[10px] font-bold px-3 py-0.5 rounded-full">SJF</span>
+        </div>
+        <div id="stepLog" class="p-5 space-y-2 max-h-56 overflow-y-auto text-xs text-gray-500 italic">
+          Run the scheduler to see the execution trace here.
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════ ADD PROCESS MODAL ═══════════ -->
+<div id="addModal" class="modal-backdrop hidden" onclick="closeAddBackdrop(event)">
+  <div class="bg-panel-bg border border-gray-800/60 rounded-3xl w-full max-w-md mx-4 shadow-2xl" onclick="event.stopPropagation()">
+    <div class="flex items-center justify-between p-6 border-b border-gray-800/50">
+      <div>
+        <h2 class="text-base font-bold text-white">Add Delivery Process</h2>
+        <p class="text-xs text-gray-500 mt-0.5">Each process = one delivery order</p>
+      </div>
+      <button onclick="closeAddModal()" class="text-gray-500 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="text-xs text-gray-400 font-medium mb-1.5 block">Process Name / Order *</label>
+        <input id="f-pname" type="text" placeholder="e.g. ORD-101 · Rahul's Order"
+          class="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl py-2.5 px-4 text-sm text-white placeholder-gray-600 focus:ring-1 focus:ring-accent-green/50 outline-none transition-colors"/>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs text-gray-400 font-medium mb-1.5 block">Date (Arrival)</label>
+          <input id="f-arrival" type="number" min="0" value="0" placeholder="0"
+            class="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl py-2.5 px-3 text-sm text-white outline-none focus:ring-1 focus:ring-accent-green/50 transition-colors"/>
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 font-medium mb-1.5 block">Distance (Burst) *</label>
+          <input id="f-burst" type="number" min="1" value="1" placeholder="1"
+            class="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl py-2.5 px-3 text-sm text-white outline-none focus:ring-1 focus:ring-accent-green/50 transition-colors"/>
+        </div>
+        <div id="priority-field">
+          <label class="text-xs text-gray-400 font-medium mb-1.5 block">Priority <span class="text-gray-600">(1=high)</span></label>
+          <input id="f-priority" type="number" min="1" value="1" placeholder="1"
+            class="w-full bg-[#1a1a1a] border border-gray-800 rounded-xl py-2.5 px-3 text-sm text-white outline-none focus:ring-1 focus:ring-accent-green/50 transition-colors"/>
+        </div>
+      </div>
+      <!-- Info pill -->
+      <div class="bg-[#0d1a12] border border-accent-green/20 rounded-xl p-3 flex items-center gap-3">
+        <i data-lucide="info" class="w-4 h-4 text-accent-green flex-shrink-0"></i>
+        <p class="text-[11px] text-gray-400" id="modal-hint">SJF: Processes with <span class="text-accent-green font-semibold">smaller burst time</span> are scheduled first.</p>
+      </div>
+    </div>
+    <div class="flex items-center justify-end gap-3 p-6 border-t border-gray-800/50">
+      <button onclick="closeAddModal()" class="px-5 py-2.5 text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded-xl transition-colors">Cancel</button>
+      <button onclick="addProcess()" class="px-5 py-2.5 text-sm font-bold text-black bg-accent-green hover:bg-accent-green/90 rounded-xl transition-colors shadow-lg shadow-accent-green/20 flex items-center gap-2">
+        <i data-lucide="plus" class="w-4 h-4"></i>Add Process
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"><span class="tdot"></span><span id="tMsg">Done</span></div>
+
+<!-- Floating settings -->
+<button class="fixed bottom-7 right-7 w-12 h-12 bg-emerald-900 hover:bg-emerald-800 rounded-xl text-white shadow-xl transition-all z-50 flex items-center justify-center">
+  <i data-lucide="settings" class="w-5 h-5 animate-spin-slow"></i>
+</button>
+
+<!-- ═══════════ JAVASCRIPT ═══════════ -->
+<script type="module">
+  import { store } from './js/store.js';
+
+  /* ──────────────────────────────────────────────────────
+     STATE
+  ────────────────────────────────────────────────────── */
+  let algo = 'sjf';
+  let processes = [];    // { id, name, arrival, burst, priority, wt, tat, ct, colorIdx, originalDate }
+  let pidCount = 0;
+
+  function syncWithOrders() {
+      const orders = store.getOrders().filter(o => o.status === 'pending' || o.status === 'processing');
+      if (!orders.length) {
+          processes = [];
+          renderTable();
+          return;
+      }
+
+      // Find earliest date to calculate relative arrival times
+      const dates = orders.map(o => o.date).filter(d => d).map(d => new Date(d).getTime());
+      const minDate = dates.length ? Math.min(...dates) : new Date().getTime();
+      const oneDay = 24 * 60 * 60 * 1000;
+
+      processes = orders.map((o, i) => {
+          const arrivalTime = o.date ? Math.max(0, Math.floor((new Date(o.date).getTime() - minDate) / oneDay)) : 0;
+          return {
+              id: o.id || `ORD-${i}`,
+              name: o.item,
+              arrival: arrivalTime,
+              burst: Math.ceil(o.distance) || 1, // use distance as burst
+              priority: (o.category === 'Smartphones' ? 1 : (o.category === 'Laptops' ? 2 : 3)),
+              colorIdx: i,
+              originalDate: o.date
+          };
+      });
+      pidCount = processes.length;
+      renderTable();
+  }
+
+  // Initialize and sync
+  store.initPromise.then(() => {
+      syncWithOrders();
+  });
+
+  const COLORS = ['pc-0','pc-1','pc-2','pc-3','pc-4','pc-5','pc-6','pc-7','pc-8','pc-9'];
+
+  /* ──────────────────────────────────────────────────────
+     ALGORITHM SELECTOR
+  ────────────────────────────────────────────────────── */
+  const algoInfo = {
+    sjf: {
+      title: 'SJF (Shortest Job First)',
+      sub: 'Non-preemptive',
+      desc: 'Processes are scheduled in order of <span class="text-accent-green font-semibold">ascending burst time</span>. Among processes arriving at the same time, the one with the smallest burst is picked first. SJF minimises average waiting time.',
+      steps: [
+        'Sort by arrival time, break ties by burst time',
+        'Pick the available process with smallest burst',
+        'Execute fully before scheduling next'
+      ]
+    },
+    priority: {
+      title: 'Priority Scheduling',
+      sub: 'Non-preemptive (1 = highest)',
+      desc: 'Processes are scheduled based on <span class="text-accent-purple font-semibold">priority number</span> — lower number = higher priority. Ties in priority are broken by arrival time. Useful for urgent delivery orders.',
+      steps: [
+        'Assign each order a priority number (1 = most urgent)',
+        'Among available processes, pick the lowest priority number',
+        'Execute fully, then pick next available by priority'
+      ]
+    }
+  };
+
+  function setAlgo(a) {
+    algo = a;
+    const tabSjf = document.getElementById('tab-sjf');
+    const tabPri = document.getElementById('tab-priority');
+    if (tabSjf) tabSjf.classList.toggle('active', a === 'sjf');
+    if (tabPri) tabPri.classList.toggle('active', a === 'priority');
+    
+    const priField = document.getElementById('priority-field');
+    if (priField) {
+        priField.style.opacity = a === 'priority' ? '1' : '0.35';
+        priField.style.pointerEvents = a === 'priority' ? 'auto' : 'none';
+    }
+    
+    const priColHdr = document.getElementById('pri-col-hdr');
+    if (priColHdr) priColHdr.style.opacity = a === 'priority' ? '1' : '0.3';
+    
+    const info = algoInfo[a];
+    const infoTitle = document.getElementById('info-title');
+    const infoDesc = document.getElementById('info-desc');
+    const infoSteps = document.getElementById('info-steps');
+    
+    if (infoTitle) infoTitle.textContent = info.title;
+    if (infoDesc) infoDesc.innerHTML = info.desc;
+    if (infoSteps) infoSteps.innerHTML = info.steps.map((s,i) => `
+      <div class="flex items-start gap-2 text-xs text-gray-500">
+        <span class="w-4 h-4 mt-0.5 rounded-full bg-accent-green/10 text-accent-green text-[9px] font-bold flex items-center justify-center flex-shrink-0">${i+1}</span>
+        ${s}
+      </div>`).join('');
+    
+    const statAlgo = document.getElementById('stat-algo');
+    const algoBadge = document.getElementById('algo-badge');
+    if (statAlgo) statAlgo.textContent = a === 'sjf' ? 'SJF' : 'Priority';
+    if (algoBadge) algoBadge.textContent = a === 'sjf' ? 'SJF' : 'Priority';
+    
+    const modalHint = document.getElementById('modal-hint');
+    if (modalHint) {
+        modalHint.innerHTML = a === 'sjf'
+          ? 'SJF: Processes with <span class="text-accent-green font-semibold">smaller burst time</span> are scheduled first.'
+          : 'Priority: Processes with <span class="text-accent-purple font-semibold">lower priority number (1=high)</span> are scheduled first.';
+    }
+    resetResults();
+  }
+
+  /* ──────────────────────────────────────────────────────
+     PROCESS TABLE
+  ────────────────────────────────────────────────────── */
+  function renderTable() {
+    const body = document.getElementById('procBody');
+    const statTotal = document.getElementById('stat-total');
+    if (statTotal) statTotal.textContent = processes.length;
+    if (!processes.length) {
+      body.innerHTML = `<tr><td colspan="8" class="px-5 py-10 text-center text-xs text-gray-700 italic">No processes — click "Add Process" or "Load Sample"</td></tr>`;
+      return;
+    }
+    body.innerHTML = processes.map((p, idx) => `
+      <tr class="proc-row">
+        <td class="px-5 py-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-7 h-7 rounded-lg ${COLORS[p.colorIdx % 10]} flex items-center justify-center text-[10px] font-bold flex-shrink-0">P${idx+1}</span>
+            <div>
+              <p class="text-sm font-semibold text-white leading-tight">${p.name}</p>
+              <p class="text-[10px] text-gray-600">${p.id}</p>
+            </div>
+          </div>
+        </td>
+        <td class="px-5 py-3 text-center font-mono text-sm text-gray-300">${p.originalDate || p.arrival}</td>
+        <td class="px-5 py-3 text-center font-mono text-sm text-white font-bold">${p.burst}</td>
+        <td class="px-5 py-3 text-center font-mono text-sm ${algo === 'priority' ? 'text-accent-purple font-bold' : 'text-gray-600'}">${p.priority}</td>
+        <td class="px-5 py-3 text-center font-mono text-sm ${p.wt !== undefined ? 'text-accent-yellow font-bold' : 'text-gray-700'}">${p.wt !== undefined ? p.wt : '—'}</td>
+        <td class="px-5 py-3 text-center font-mono text-sm ${p.tat !== undefined ? 'text-accent-purple font-bold' : 'text-gray-700'}">${p.tat !== undefined ? p.tat : '—'}</td>
+        <td class="px-5 py-3 text-center font-mono text-sm ${p.ct !== undefined ? 'text-accent-green font-bold' : 'text-gray-700'}">${p.ct !== undefined ? p.ct : '—'}</td>
+        <td class="px-5 py-3 text-right">
+          <button onclick="removeProcess('${p.id}')" class="p-1.5 rounded-lg hover:bg-red-500/10 text-gray-600 hover:text-red-500 transition-colors">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+    if(window.lucide) window.lucide.createIcons();
+  }
+
+  /* ──────────────────────────────────────────────────────
+     SCHEDULING ALGORITHMS
+  ────────────────────────────────────────────────────── */
+  function runScheduler() {
+    if (!processes.length) { showToast('⚠️ Add at least one process first!', '#FFD700'); return; }
+
+    // Reset results
+    processes.forEach(p => { p.wt = undefined; p.tat = undefined; p.ct = undefined; });
+
+    const ganttBlocks = [];
+    const logs = [];
+    let time = 0;
+    const remaining = processes.map(p => ({ ...p }));
+
+    if (algo === 'sjf') {
+      const done = new Set();
+      while (done.size < remaining.length) {
+        const available = remaining.filter(p => p.arrival <= time && !done.has(p.id));
+        if (!available.length) {
+          const nextArrival = Math.min(...remaining.filter(p => !done.has(p.id)).map(p => p.arrival));
+          ganttBlocks.push({ label: 'IDLE', start: time, end: nextArrival, colorIdx: -1 });
+          logs.push(`⏸ [t=${time}] CPU idle — waiting for next process (arrives at t=${nextArrival})`);
+          time = nextArrival;
+          continue;
+        }
+        available.sort((a, b) => a.burst - b.burst || a.arrival - b.arrival);
+        const p = available[0];
+        const start = time;
+        const end = time + p.burst;
+        ganttBlocks.push({ label: `P${processes.findIndex(x => x.id === p.id) + 1}`, start, end, colorIdx: p.colorIdx, id: p.id });
+        logs.push(`▶ [t=${start}→${end}] Running ${p.name} | Burst=${p.burst}`);
+        time = end;
+        const orig = processes.find(x => x.id === p.id);
+        orig.ct = end;
+        orig.tat = end - p.arrival;
+        orig.wt = orig.tat - p.burst;
+        done.add(p.id);
+      }
+    } else {
+      const done = new Set();
+      while (done.size < remaining.length) {
+        const available = remaining.filter(p => p.arrival <= time && !done.has(p.id));
+        if (!available.length) {
+          const nextArrival = Math.min(...remaining.filter(p => !done.has(p.id)).map(p => p.arrival));
+          ganttBlocks.push({ label: 'IDLE', start: time, end: nextArrival, colorIdx: -1 });
+          logs.push(`⏸ [t=${time}] CPU idle — next process arrives at t=${nextArrival}`);
+          time = nextArrival;
+          continue;
+        }
+        available.sort((a, b) => a.priority - b.priority || a.arrival - b.arrival);
+        const p = available[0];
+        const start = time;
+        const end = time + p.burst;
+        ganttBlocks.push({ label: `P${processes.findIndex(x => x.id === p.id) + 1}`, start, end, colorIdx: p.colorIdx, id: p.id });
+        logs.push(`▶ [t=${start}→${end}] Running ${p.name} | Priority=${p.priority} | Burst=${p.burst}`);
+        time = end;
+        const orig = processes.find(x => x.id === p.id);
+        orig.ct = end;
+        orig.tat = end - p.arrival;
+        orig.wt = orig.tat - p.burst;
+        done.add(p.id);
+      }
+    }
+
+    const totalWT  = processes.reduce((s, p) => s + (p.wt || 0), 0);
+    const totalTAT = processes.reduce((s, p) => s + (p.tat || 0), 0);
+    const awt = (totalWT / processes.length).toFixed(2);
+    const att = (totalTAT / processes.length).toFixed(2);
+    const statAwt = document.getElementById('stat-awt');
+    const statAtt = document.getElementById('stat-att');
+    if (statAwt) statAwt.textContent = awt;
+    if (statAtt) statAtt.textContent = att;
+
+    renderTable();
+    renderGantt(ganttBlocks);
+    renderLog(logs, awt, att);
+    showToast(`✓ Schedule complete — AWT=${awt}, ATT=${att}`);
+  }
+
+  /* ──────────────────────────────────────────────────────
+     GANTT CHART RENDERER
+  ────────────────────────────────────────────────────── */
+  function renderGantt(blocks) {
+    const container = document.getElementById('gantt-container');
+    const empty = document.getElementById('gantt-empty');
+    const rowsEl = document.getElementById('gantt-rows');
+    const rulerEl = document.getElementById('gantt-ruler');
+    const statsEl = document.getElementById('gantt-stats');
+    const legendEl = document.getElementById('gantt-legend');
+
+    if (container) container.classList.remove('hidden');
+    if (empty) empty.classList.add('hidden');
+
+    const totalTime = blocks[blocks.length - 1].end;
+    const CELL_W = 28;
+
+    if (rowsEl) {
+        rowsEl.innerHTML = `
+          <div class="flex items-center gap-1 mb-1">
+            <span class="text-[9px] text-gray-600 w-16 flex-shrink-0 text-right pr-2">CPU</span>
+            <div class="flex items-stretch gap-px">
+              ${blocks.map((b, i) => {
+                const w = (b.end - b.start) * CELL_W;
+                const delay = i * 0.04;
+                if (b.colorIdx === -1) {
+                  return `<div class="gantt-cell bg-[#1a1a1a] border border-gray-800/60 text-gray-600" style="width:${w}px;animation-delay:${delay}s" title="IDLE [${b.start}→${b.end}]">
+                    <span class="truncate px-1" style="font-size:9px">IDLE</span>
+                  </div>`;
+                }
+                return `<div class="gantt-cell ${COLORS[b.colorIdx % 10]}" style="width:${w}px;animation-delay:${delay}s" title="${b.label} [${b.start}→${b.end}]">
+                  <span class="truncate px-1">${b.label}</span>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+    }
+
+    if (rulerEl) {
+        rulerEl.innerHTML = `<div class="w-16 flex-shrink-0"></div>` +
+          Array.from({ length: totalTime + 1 }, (_, t) =>
+            `<div class="timeline-tick" style="flex:0 0 ${CELL_W}px">${t}</div>`
+          ).join('');
+    }
+
+    if (statsEl) {
+        statsEl.innerHTML = processes.map((p, i) => `
+          <div class="bg-[#0d0d0d] border border-gray-800/40 rounded-xl p-3 flex items-center gap-3">
+            <span class="w-7 h-7 rounded-lg ${COLORS[p.colorIdx % 10]} flex items-center justify-center text-[10px] font-bold flex-shrink-0">P${i+1}</span>
+            <div class="min-w-0">
+              <p class="text-[10px] text-white font-semibold truncate">${p.name}</p>
+              <p class="text-[9px] text-gray-500 mt-0.5">WT=<b class="text-accent-yellow">${p.wt ?? '—'}</b> · TAT=<b class="text-accent-purple">${p.tat ?? '—'}</b> · CT=<b class="text-accent-green">${p.ct ?? '—'}</b></p>
+            </div>
+          </div>`).join('');
+    }
+
+    if (legendEl) {
+        legendEl.innerHTML = processes.map((p, i) => `
+          <span class="flex items-center gap-1.5 text-[10px] text-gray-400">
+            <span class="w-2.5 h-2.5 rounded-sm ${COLORS[p.colorIdx % 10].split(' ')[0]}"></span>P${i+1}
+          </span>`).join('');
+    }
+
+    if(window.lucide) window.lucide.createIcons();
+  }
+
+  function renderLog(logs, awt, att) {
+    const el = document.getElementById('stepLog');
+    if (el) {
+        el.innerHTML = `
+          <div class="not-italic space-y-1.5">
+            ${logs.map((l, i) => `
+              <div class="flex items-start gap-2">
+                <span class="text-[9px] text-gray-700 font-mono w-5 flex-shrink-0 mt-0.5">${String(i+1).padStart(2,'0')}</span>
+                <span class="text-xs ${l.startsWith('▶') ? 'text-accent-green' : 'text-gray-500'}">${l}</span>
+              </div>`).join('')}
+            <div class="mt-3 pt-3 border-t border-gray-800/40 flex gap-6">
+              <span class="text-xs text-gray-400">Avg. Wait: <b class="text-accent-yellow">${awt}</b> units</span>
+              <span class="text-xs text-gray-400">Avg. TAT: <b class="text-accent-purple">${att}</b> units</span>
+            </div>
+          </div>`;
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────
+     MODAL
+  ────────────────────────────────────────────────────── */
+  function openAddModal() {
+    ['f-pname','f-arrival','f-burst','f-priority'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = (id==='f-arrival'?0:(id==='f-pname'?'':1));
+    });
+    const modal = document.getElementById('addModal');
+    if (modal) modal.classList.remove('hidden');
+    setTimeout(() => {
+        const pname = document.getElementById('f-pname');
+        if (pname) pname.focus();
+    }, 50);
+  }
+  function closeAddModal() { const modal = document.getElementById('addModal'); if (modal) modal.classList.add('hidden'); }
+  function closeAddBackdrop(e) { if (e.target.id === 'addModal') closeAddModal(); }
+
+  function addProcess() {
+    const name    = document.getElementById('f-pname').value.trim();
+    const arrival = parseInt(document.getElementById('f-arrival').value) || 0;
+    const burst   = parseInt(document.getElementById('f-burst').value) || 1;
+    const priority = parseInt(document.getElementById('f-priority').value) || 1;
+    if (!name) { showToast('⚠️ Process name is required!', '#FFD700'); return; }
+    if (burst < 1) { showToast('⚠️ Burst time must be ≥ 1', '#FFD700'); return; }
+    const p = { id: 'PID-' + (++pidCount), name, arrival, burst, priority, colorIdx: pidCount - 1 };
+    processes.push(p);
+    closeAddModal();
+    renderTable();
+    showToast(`✓ ${name} added (Burst=${burst})`);
+  }
+
+  function removeProcess(id) {
+    processes = processes.filter(p => p.id !== id);
+    renderTable();
+    resetResults();
+  }
+
+  function clearAll() {
+    processes = [];
+    pidCount = 0;
+    renderTable();
+    resetResults();
+    showToast('All processes cleared');
+  }
+
+  /* ──────────────────────────────────────────────────────
+     STORE / SAMPLE DATA
+  ────────────────────────────────────────────────────── */
+  function importFromStore() {
+    const orders = store.getQueue(); // Pull from the active delivery queue
+    if (!orders.length) {
+        showToast('⚠️ Delivery queue is empty! No orders to import.', '#ef4444');
+        return;
+    }
+    clearAll();
+    orders.forEach((o, i) => {
+        // Map order fields to process fields
+        // Burst time = quantity + 2 (simulated)
+        // Priority = (High:1, Medium:2, Low:3)
+        let pri = 2;
+        if (o.priority === 'High') pri = 1;
+        if (o.priority === 'Low') pri = 3;
+
+        processes.push({
+            id: o.id,
+            name: `${o.id} · ${o.customer}`,
+            arrival: i, // Simulated arrival in order of queue
+            burst: (o.qty || 1) + 2,
+            priority: pri,
+            colorIdx: pidCount++
+        });
+    });
+    renderTable();
+    showToast(`✓ Imported ${orders.length} orders from queue!`);
+  }
+
+  function loadSample() {
+    clearAll();
+    const samples = [
+      { name: 'ORD-101 · Rahul (TV)',      arrival: 0, burst: 6, priority: 2 },
+      { name: 'ORD-102 · Priya (Shoes)',    arrival: 1, burst: 3, priority: 1 },
+      { name: 'ORD-103 · Ankit (Noodles)', arrival: 2, burst: 8, priority: 4 },
+      { name: 'ORD-104 · Sneha (Shelf)',   arrival: 3, burst: 2, priority: 3 },
+      { name: 'ORD-105 · Arun (Earbuds)',  arrival: 4, burst: 4, priority: 2 },
+    ];
+    samples.forEach(s => {
+      processes.push({ id: 'PID-' + (++pidCount), ...s, colorIdx: pidCount - 1 });
+    });
+    renderTable();
+    showToast('✓ Sample data loaded — click Run Schedule!');
+  }
+
+  function resetResults() {
+    processes.forEach(p => { delete p.wt; delete p.tat; delete p.ct; });
+    
+    const statAwt = document.getElementById('stat-awt');
+    const statAtt = document.getElementById('stat-att');
+    if (statAwt) statAwt.textContent = '—';
+    if (statAtt) statAtt.textContent = '—';
+    
+    const ganttCont = document.getElementById('gantt-container');
+    const ganttEmpty = document.getElementById('gantt-empty');
+    if (ganttCont) ganttCont.classList.add('hidden');
+    if (ganttEmpty) ganttEmpty.classList.remove('hidden');
+    
+    const stepLog = document.getElementById('stepLog');
+    if (stepLog) stepLog.innerHTML = '<span class="italic">Run the scheduler to see the execution trace here.</span>';
+    
+    const ganttLegend = document.getElementById('gantt-legend');
+    if (ganttLegend) ganttLegend.innerHTML = '';
+  }
+
+  let toastTimer;
+  function showToast(msg, dotColor) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    const dot = t.querySelector('.tdot');
+    const tMsg = document.getElementById('tMsg');
+    if (tMsg) tMsg.textContent = msg;
+    if (dot) dot.style.background = dotColor || '#32D583';
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  // Bind to window
+  window.setAlgo = setAlgo;
+  window.runScheduler = runScheduler;
+  window.openAddModal = openAddModal;
+  window.closeAddModal = closeAddModal;
+  window.closeAddBackdrop = closeAddBackdrop;
+  window.addProcess = addProcess;
+  window.removeProcess = removeProcess;
+  window.clearAll = clearAll;
+  window.loadSample = loadSample;
+  window.importFromStore = importFromStore;
+
+  /* ──────────────────────────────────────────────────────
+     INIT
+  ────────────────────────────────────────────────────── */
+  window.addEventListener('DOMContentLoaded', () => {
+    store.initPromise.then(() => {
+        renderProcessTable();
+    });
+    if(window.lucide) window.lucide.createIcons();
+  });
+</script>
+</body>
+</html>
