@@ -1,36 +1,30 @@
-# .gitignore for .NET Project
+# Build and release folders
+bin/
+obj/
 
-# Build results
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-[Ll]ogs/
-
-# IDE files
+# Visual Studio / IDE folders
 .vs/
 .vscode/
 *.user
+*.suo
 *.userosscache
 *.sln.docstates
 
-# Secrets and User specifics
-appsettings.Development.json
-data.json
+# Publish output
+PublishOutput/
+out/
 
-# Node modules (if any)
-node_modules/
+# Environment variables
+.env
 
-# OS files
+# MacOS
 .DS_Store
-Thumbs.db
 
-# Documentation artifacts (AI folders)
-.gemini/
-.agents/
-.agent/
-_agents/
-_agent/
-brain/
-task.md
-implementation_plan.md
-walkthrough.md
+# Temporary files
+*.tmp
+*.log
+
+# data.json is currently tracking persistence (mock database). 
+# Remove this line if you want to track fresh installations, 
+# otherwise we keep it so teachers can see your dummy data immediately!
+# data.json

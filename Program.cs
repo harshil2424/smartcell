@@ -1,4 +1,7 @@
-using SmartCell.Services;
+using SmartCell.Services.Core;
+using SmartCell.Services.Inventory;
+using SmartCell.Services.Orders;
+using SmartCell.Services.DataStructures;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,8 +12,12 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-// Register our custom Store Service
-builder.Services.AddSingleton<IStoreService, StoreService>();
+// Register our modular Services
+builder.Services.AddSingleton<IJsonStorageService, JsonStorageService>();
+builder.Services.AddSingleton<IInventoryService, InventoryService>();
+builder.Services.AddSingleton<IOrderService, OrderService>();
+builder.Services.AddSingleton<IHashingService, HashingService>();
+builder.Services.AddSingleton<IQueueService, QueueService>();
 
 var app = builder.Build();
 

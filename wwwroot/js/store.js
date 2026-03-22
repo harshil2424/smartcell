@@ -175,6 +175,25 @@ class Store {
         return null;
     }
 
+    async backendDequeue() {
+        try {
+            const response = await fetch('/api/store/queue/dequeue', { method: 'POST' });
+            if (response.ok) {
+                const order = await response.json();
+                const idx = this.data.deliveryQueue.findIndex(o => o.id === order.id);
+                if (idx > -1) this.data.deliveryQueue.splice(idx, 1);
+                this.data.queueInProgress.push(order);
+                this.updateOrderStatus(order.id, 'processing');
+                this.addQueueLog('PROCESS', order.id, order.item, 'In Progress');
+                return order;
+            }
+            return null;
+        } catch (e) {
+            console.error('Dequeue failed', e);
+            return null;
+        }
+    }
+
     moveToDelivered(orderId) {
         this.updateOrderStatus(orderId, 'delivered');
         const idx = this.data.queueInProgress.findIndex(o => o.id === orderId);
@@ -239,19 +258,33 @@ class Store {
 
     async clearHashingTable() {
         try {
-            for (let i = 0; i < 13; i++) {
-                await fetch(`/api/store/hashing/${i}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(null)
-                });
-            }
+            await fetch(`/api/store/hashing`, { method: 'DELETE' });
             if (this.data.hashingTable) {
                 this.data.hashingTable = new Array(13).fill(null);
             }
         } catch (e) {
             console.error('Error clearing hash table', e);
         }
+    }
+
+    async calculateHash(itemId) {
+        try {
+            const response = await fetch('/api/store/hashing/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(itemId)
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && this.data.hashingTable) {
+                    this.data.hashingTable[result.finalIndex] = itemId;
+                }
+                return result;
+            }
+        } catch (e) {
+            console.error('Error calculating hash via backend', e);
+        }
+        return null;
     }
 }
 
