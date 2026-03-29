@@ -1,5 +1,5 @@
+using Microsoft.EntityFrameworkCore;
 using SmartCell.Models;
-using SmartCell.Services.Core;
 
 namespace SmartCell.Services.DataStructures
 {
@@ -14,38 +14,30 @@ namespace SmartCell.Services.DataStructures
 
     public class QueueService : IQueueService
     {
-        private readonly IJsonStorageService _storage;
+        private readonly AppDbContext _context;
 
-        public QueueService(IJsonStorageService storage)
+        public QueueService(AppDbContext context)
         {
-            _storage = storage;
+            _context = context;
         }
 
         public async Task EnqueueAsync(QueueItem item)
         {
-            var data = await _storage.GetStoreDataAsync();
-            await EnqueueInternalAsync(data, item);
-            await _storage.SaveStoreDataAsync(data);
-        }
-
-        private async Task EnqueueInternalAsync(StoreData data, QueueItem item)
-        {
-            if (data.DeliveryQueue.Any(o => o.Id == item.Id) || 
-                data.QueueInProgress.Any(o => o.Id == item.Id) || 
-                data.QueueDelivered.Any(o => o.Id == item.Id))
+            if (await _context.QueueItems.AnyAsync(q => q.Id == item.Id))
                 return;
 
             item.Id = item.Id ?? "#SC-" + new Random().Next(1000, 9999);
             item.Time = DateTime.Now.ToString("hh:mm tt");
             item.Date = DateTime.Now.ToString("MMM dd");
-            
-            data.DeliveryQueue.Add(item);
-            AddQueueLog(data, "ENQUEUE", item.Id, item.Item, "Pending");
+            item.QueueType = "DeliveryQueue";
 
-            var existingOrder = data.Orders.Find(o => o.Id == item.Id);
-            if (existingOrder == null)
+            _context.QueueItems.Add(item);
+            
+            LogEvent("ENQUEUE", item.Id, item.Item, "Pending");
+
+            if (!await _context.Orders.AnyAsync(o => o.Id == item.Id))
             {
-                data.Orders.Add(new Order {
+                _context.Orders.Add(new Order {
                     Id = item.Id,
                     Customer = item.Customer,
                     Item = item.Item,
@@ -54,92 +46,106 @@ namespace SmartCell.Services.DataStructures
                     Email = item.Customer.ToLower().Replace(" ",".") + "@example.com"
                 });
             }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<QueueItem?> DequeueAsync()
         {
-            var data = await _storage.GetStoreDataAsync();
-            if (data.DeliveryQueue.Count == 0) return null;
+            // Strict FIFO from DeliveryQueue
+            var item = await _context.QueueItems
+                .Where(q => q.QueueType == "DeliveryQueue")
+                .FirstOrDefaultAsync();
 
-            // Strict FIFO: pop front index 0
-            var o = data.DeliveryQueue[0];
-            data.DeliveryQueue.RemoveAt(0);
-            data.QueueInProgress.Add(o);
-            
-            AddQueueLog(data, "PROCESS", o.Id, o.Item, "In Progress");
-            var order = data.Orders.Find(x => x.Id == o.Id);
-            if (order != null) order.Status = "processing";
-            
-            await _storage.SaveStoreDataAsync(data);
-            return o;
+            if (item == null) return null;
+
+            item.QueueType = "InProgress";
+            UpdateOrderStatus(item.Id, "processing");
+            LogEvent("PROCESS", item.Id, item.Item, "In Progress");
+
+            await _context.SaveChangesAsync();
+            return item;
         }
 
         public async Task MoveToInProgressAsync(string id)
         {
-            var data = await _storage.GetStoreDataAsync();
-            var o = data.DeliveryQueue.Find(x => x.Id == id);
-            if (o != null)
+            var item = await _context.QueueItems.FindAsync(id);
+            if (item != null && item.QueueType == "DeliveryQueue")
             {
-                data.DeliveryQueue.Remove(o);
-                data.QueueInProgress.Add(o);
-                AddQueueLog(data, "PROCESS", id, o.Item, "In Progress");
-                
-                var order = data.Orders.Find(x => x.Id == id);
-                if (order != null) order.Status = "processing";
-                
-                await _storage.SaveStoreDataAsync(data);
+                item.QueueType = "InProgress";
+                UpdateOrderStatus(id, "processing");
+                LogEvent("PROCESS", id, item.Item, "In Progress");
+                await _context.SaveChangesAsync();
             }
         }
 
         public async Task MoveToDeliveredAsync(string id)
         {
-            var data = await _storage.GetStoreDataAsync();
-            var o = data.QueueInProgress.Find(x => x.Id == id);
-            if (o != null)
+            var item = await _context.QueueItems.FindAsync(id);
+            if (item != null && item.QueueType == "InProgress")
             {
-                data.QueueInProgress.Remove(o);
-                data.QueueDelivered.Add(o);
-                AddQueueLog(data, "DELIVER", id, o.Item, "Delivered");
-                
-                var order = data.Orders.Find(x => x.Id == id);
-                if (order != null) order.Status = "delivered";
-                
-                AddActivity(data, "Delivered", o.Item, o.Qty, "Completed");
-                await _storage.SaveStoreDataAsync(data);
+                item.QueueType = "Delivered";
+                UpdateOrderStatus(id, "delivered");
+                LogEvent("DELIVER", id, item.Item, "Delivered");
+                AddActivity("Delivered", item.Item, item.Qty, "Completed");
+                await _context.SaveChangesAsync();
             }
         }
 
         public async Task ClearQueueLogAsync()
         {
-            var data = await _storage.GetStoreDataAsync();
-            data.QueueLog.Clear();
-            await _storage.SaveStoreDataAsync(data);
+            _context.QueueLogs.RemoveRange(_context.QueueLogs);
+            await _context.SaveChangesAsync();
         }
 
-        private void AddQueueLog(StoreData data, string ev, string orderId, string item, string status)
+        private void LogEvent(string ev, string orderId, string itemText, string status)
         {
-            data.QueueLog.Insert(0, new QueueLogEntry {
-                Id = data.QueueLog.Count + 1,
+            int nextId = (_context.QueueLogs.Max(q => (int?)q.Id) ?? 0) + 1;
+            var log = new QueueLogEntry {
+                Id = nextId,
                 Event = ev,
                 OrderId = orderId,
-                Item = item,
+                Item = itemText,
                 Status = status,
                 Time = DateTime.Now.ToString("hh:mm tt")
-            });
-            if (data.QueueLog.Count > 50) data.QueueLog.RemoveAt(50);
+            };
+            
+            _context.QueueLogs.Add(log);
+            
+            // Delete old logs if more than 50
+            var count = _context.QueueLogs.Count();
+            if (count >= 50)
+            {
+                var oldest = _context.QueueLogs.OrderBy(q => q.Id).First();
+                _context.QueueLogs.Remove(oldest);
+            }
         }
 
-        private void AddActivity(StoreData data, string action, string item, int qty, string status)
+        private void AddActivity(string action, string itemText, int qty, string status)
         {
-            data.RecentActivity.Insert(0, new ActivityLogEntry {
+            var entry = new ActivityLogEntry {
                 Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 Action = action,
-                Item = item,
+                Item = itemText,
                 Qty = qty,
                 Status = status,
                 Time = "Just now"
-            });
-            if (data.RecentActivity.Count > 10) data.RecentActivity.RemoveAt(10);
+            };
+            
+            _context.ActivityLogs.Add(entry);
+            
+            var count = _context.ActivityLogs.Count();
+            if (count >= 10)
+            {
+                var oldest = _context.ActivityLogs.OrderBy(a => a.Id).First();
+                _context.ActivityLogs.Remove(oldest);
+            }
+        }
+
+        private void UpdateOrderStatus(string id, string status)
+        {
+            var order = _context.Orders.FirstOrDefault(o => o.Id == id);
+            if (order != null) order.Status = status;
         }
     }
 }

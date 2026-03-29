@@ -114,6 +114,9 @@ namespace SmartCell.Models
 
         [JsonPropertyName("date")]
         public string Date { get; set; } = "";
+
+        [JsonIgnore]
+        public string QueueType { get; set; } = "DeliveryQueue";
     }
 
     public class QueueLogEntry

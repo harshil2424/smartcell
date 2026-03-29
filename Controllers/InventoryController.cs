@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartCell.Models;
 using SmartCell.Services.Inventory;
 using SmartCell.Services.Orders;
-using SmartCell.Services.Core;
 
 namespace SmartCell.Controllers
 {
@@ -12,19 +12,34 @@ namespace SmartCell.Controllers
     {
         private readonly IInventoryService _inventoryService;
         private readonly IOrderService _orderService;
-        private readonly IJsonStorageService _storageService;
+        private readonly AppDbContext _context;
 
-        public InventoryController(IInventoryService inventoryService, IOrderService orderService, IJsonStorageService storageService)
+        public InventoryController(IInventoryService inventoryService, IOrderService orderService, AppDbContext context)
         {
             _inventoryService = inventoryService;
             _orderService = orderService;
-            _storageService = storageService;
+            _context = context;
         }
 
         [HttpGet]
         public async Task<ActionResult<StoreData>> Get()
         {
-            return Ok(await _storageService.GetStoreDataAsync());
+            // Build the StoreData state from the database
+            var queueItems = await _context.QueueItems.ToListAsync();
+            
+            var storeData = new StoreData
+            {
+                Inventory = await _context.InventoryItems.ToListAsync(),
+                Orders = await _context.Orders.ToListAsync(),
+                DeliveryQueue = queueItems.Where(q => q.QueueType == "DeliveryQueue").ToList(),
+                QueueInProgress = queueItems.Where(q => q.QueueType == "InProgress").ToList(),
+                QueueDelivered = queueItems.Where(q => q.QueueType == "Delivered").ToList(),
+                QueueLog = await _context.QueueLogs.OrderByDescending(q => q.Id).ToListAsync(),
+                RecentActivity = await _context.ActivityLogs.OrderByDescending(a => a.Id).ToListAsync(),
+                HashingTable = (await _context.HashingTable.OrderBy(h => h.Index).ToListAsync()).Select(h => h.ItemId).ToList()
+            };
+
+            return Ok(storeData);
         }
 
         // --- Inventory ---

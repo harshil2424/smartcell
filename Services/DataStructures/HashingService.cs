@@ -1,5 +1,5 @@
+using Microsoft.EntityFrameworkCore;
 using SmartCell.Models;
-using SmartCell.Services.Core;
 
 namespace SmartCell.Services.DataStructures
 {
@@ -23,48 +23,48 @@ namespace SmartCell.Services.DataStructures
 
     public class HashingService : IHashingService
     {
-        private readonly IJsonStorageService _storage;
+        private readonly AppDbContext _context;
 
-        public HashingService(IJsonStorageService storage)
+        public HashingService(AppDbContext context)
         {
-            _storage = storage;
+            _context = context;
         }
 
         public async Task<List<long?>> GetHashingTableAsync()
         {
-            var data = await _storage.GetStoreDataAsync();
-            return data.HashingTable;
+            var units = await _context.HashingTable.OrderBy(h => h.Index).ToListAsync();
+            return units.Select(u => u.ItemId).ToList();
         }
 
         public async Task UpdateHashingUnitAsync(int index, long? itemId)
         {
-            var data = await _storage.GetStoreDataAsync();
-            if (index >= 0 && index < data.HashingTable.Count)
+            var unit = await _context.HashingTable.FindAsync(index);
+            if (unit != null)
             {
-                data.HashingTable[index] = itemId;
-                await _storage.SaveStoreDataAsync(data);
+                unit.ItemId = itemId;
+                await _context.SaveChangesAsync();
             }
         }
 
         public async Task ClearHashingTableAsync()
         {
-            var data = await _storage.GetStoreDataAsync();
-            for (int i = 0; i < data.HashingTable.Count; i++)
-                data.HashingTable[i] = null;
-            await _storage.SaveStoreDataAsync(data);
+            var units = await _context.HashingTable.ToListAsync();
+            foreach (var unit in units)
+            {
+                unit.ItemId = null;
+            }
+            await _context.SaveChangesAsync();
         }
 
         public async Task<HashResult> HashItemAsync(long itemId)
         {
-            var data = await _storage.GetStoreDataAsync();
-            var item = data.Inventory.Find(x => x.Id == itemId);
             var result = new HashResult();
+            var item = await _context.InventoryItems.FindAsync(itemId);
             
             if (item == null) return result;
 
             string key = item.Name;
-            int asciiSum = 0;
-            foreach (char c in key) asciiSum += (int)c;
+            int asciiSum = key.Sum(c => (int)c);
 
             int tableSize = 13;
             int initialIndex = asciiSum % tableSize;
@@ -75,8 +75,11 @@ namespace SmartCell.Services.DataStructures
             result.Log.Add($"> ASCII Sum: {asciiSum}");
             result.Log.Add($"> (Sum % {tableSize}) = {initialIndex}");
 
+            var units = await _context.HashingTable.OrderBy(h => h.Index).ToListAsync();
             int steps = 0;
-            while (data.HashingTable[actualIndex] != null && steps < tableSize)
+            
+            // Linear probing logic is now straightforward and directly queries the EF elements
+            while (units[actualIndex].ItemId != null && steps < tableSize)
             {
                 if (!collisionDetected)
                 {
@@ -100,15 +103,13 @@ namespace SmartCell.Services.DataStructures
                 return result;
             }
 
-            // Success: Store it
-            data.HashingTable[actualIndex] = itemId;
-            await _storage.SaveStoreDataAsync(data);
+            units[actualIndex].ItemId = itemId;
+            await _context.SaveChangesAsync();
             
             result.Success = true;
-            if (collisionDetected)
-                result.Log.Add($"✓ Stored at unit {actualIndex} after linear probing.");
-            else
-                result.Log.Add($"✓ Stored successfully at unit {actualIndex}.");
+            result.Log.Add(collisionDetected 
+                ? $"✓ Stored at unit {actualIndex} after linear probing." 
+                : $"✓ Stored successfully at unit {actualIndex}.");
 
             return result;
         }

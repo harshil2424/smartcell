@@ -1,4 +1,5 @@
-using SmartCell.Services.Core;
+using Microsoft.EntityFrameworkCore;
+using SmartCell.Models;
 using SmartCell.Services.Inventory;
 using SmartCell.Services.Orders;
 using SmartCell.Services.DataStructures;
@@ -12,14 +13,25 @@ builder.Services.AddControllersWithViews()
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
+// Register Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+
 // Register our modular Services
-builder.Services.AddSingleton<IJsonStorageService, JsonStorageService>();
-builder.Services.AddSingleton<IInventoryService, InventoryService>();
-builder.Services.AddSingleton<IOrderService, OrderService>();
-builder.Services.AddSingleton<IHashingService, HashingService>();
-builder.Services.AddSingleton<IQueueService, QueueService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IHashingService, HashingService>();
+builder.Services.AddScoped<IQueueService, QueueService>();
 
 var app = builder.Build();
+
+// Auto-migrate and seed DB
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    DbSeeder.Seed(context);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

@@ -1,5 +1,5 @@
+using Microsoft.EntityFrameworkCore;
 using SmartCell.Models;
-using SmartCell.Services.Core;
 
 namespace SmartCell.Services.Orders
 {
@@ -12,55 +12,64 @@ namespace SmartCell.Services.Orders
 
     public class OrderService : IOrderService
     {
-        private readonly IJsonStorageService _storage;
+        private readonly AppDbContext _context;
 
-        public OrderService(IJsonStorageService storage)
+        public OrderService(AppDbContext context)
         {
-            _storage = storage;
+            _context = context;
         }
 
         public async Task AddOrderAsync(Order order)
         {
-            var data = await _storage.GetStoreDataAsync();
             order.Id = string.IsNullOrWhiteSpace(order.Id) ? "#SC-" + new Random().Next(1000, 9999) : order.Id;
             order.Date = string.IsNullOrWhiteSpace(order.Date) ? DateTime.Now.ToString("yyyy-MM-dd") : order.Date;
-            data.Orders.Add(order);
-            AddActivity(data, "Ordered", order.Item, 1, "Pending");
-            await _storage.SaveStoreDataAsync(data);
+            
+            _context.Orders.Add(order);
+            AddActivity("Ordered", order.Item, 1, "Pending");
+            
+            await _context.SaveChangesAsync();
         }
 
         public async Task UpdateOrderStatusAsync(string id, string status)
         {
-            var data = await _storage.GetStoreDataAsync();
-            var o = data.Orders.Find(x => x.Id == id);
+            var o = await _context.Orders.FindAsync(id);
             if (o != null)
             {
                 o.Status = status;
-                await _storage.SaveStoreDataAsync(data);
+                await _context.SaveChangesAsync();
             }
         }
 
         public async Task DeleteOrderAsync(string id)
         {
-            var data = await _storage.GetStoreDataAsync();
-            data.Orders.RemoveAll(o => o.Id == id);
-            data.DeliveryQueue.RemoveAll(o => o.Id == id);
-            data.QueueInProgress.RemoveAll(o => o.Id == id);
-            data.QueueDelivered.RemoveAll(o => o.Id == id);
-            await _storage.SaveStoreDataAsync(data);
+            var order = await _context.Orders.FindAsync(id);
+            if (order != null) _context.Orders.Remove(order);
+
+            var queueItems = await _context.QueueItems.Where(q => q.Id == id).ToListAsync();
+            _context.QueueItems.RemoveRange(queueItems);
+            
+            await _context.SaveChangesAsync();
         }
 
-        private void AddActivity(StoreData data, string action, string item, int qty, string status)
+        private void AddActivity(string action, string itemText, int qty, string status)
         {
-            data.RecentActivity.Insert(0, new ActivityLogEntry {
+            var entry = new ActivityLogEntry {
                 Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 Action = action,
-                Item = item,
+                Item = itemText,
                 Qty = qty,
                 Status = status,
                 Time = "Just now"
-            });
-            if (data.RecentActivity.Count > 10) data.RecentActivity.RemoveAt(10);
+            };
+            
+            _context.ActivityLogs.Add(entry);
+            
+            var count = _context.ActivityLogs.Count();
+            if (count >= 10)
+            {
+                var oldest = _context.ActivityLogs.OrderBy(a => a.Id).First();
+                _context.ActivityLogs.Remove(oldest);
+            }
         }
     }
 }

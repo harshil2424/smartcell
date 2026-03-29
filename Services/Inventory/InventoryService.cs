@@ -1,5 +1,5 @@
+using Microsoft.EntityFrameworkCore;
 using SmartCell.Models;
-using SmartCell.Services.Core;
 
 namespace SmartCell.Services.Inventory
 {
@@ -12,27 +12,27 @@ namespace SmartCell.Services.Inventory
 
     public class InventoryService : IInventoryService
     {
-        private readonly IJsonStorageService _storage;
+        private readonly AppDbContext _context;
 
-        public InventoryService(IJsonStorageService storage)
+        public InventoryService(AppDbContext context)
         {
-            _storage = storage;
+            _context = context;
         }
 
         public async Task AddInventoryItemAsync(InventoryItem item)
         {
-            var data = await _storage.GetStoreDataAsync();
             item.Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             item.Date = DateTime.Now.ToString("MMM dd, yyyy");
-            data.Inventory.Add(item);
-            AddActivity(data, "Added", item.Name, item.Qty, item.Status);
-            await _storage.SaveStoreDataAsync(data);
+            
+            _context.InventoryItems.Add(item);
+            AddActivity("Added", item.Name, item.Qty, item.Status);
+            
+            await _context.SaveChangesAsync();
         }
 
         public async Task UpdateInventoryItemAsync(long id, InventoryItem updates)
         {
-            var data = await _storage.GetStoreDataAsync();
-            var existing = data.Inventory.Find(i => i.Id == id);
+            var existing = await _context.InventoryItems.FindAsync(id);
             if (existing != null)
             {
                 if (updates.Name != null) existing.Name = updates.Name;
@@ -42,28 +42,40 @@ namespace SmartCell.Services.Inventory
                 existing.Price = updates.Price;
                 if (updates.Supplier != null) existing.Supplier = updates.Supplier;
                 if (updates.Status != null) existing.Status = updates.Status;
-                await _storage.SaveStoreDataAsync(data);
+                
+                await _context.SaveChangesAsync();
             }
         }
 
         public async Task DeleteInventoryItemAsync(long id)
         {
-            var data = await _storage.GetStoreDataAsync();
-            data.Inventory.RemoveAll(i => i.Id == id);
-            await _storage.SaveStoreDataAsync(data);
+            var item = await _context.InventoryItems.FindAsync(id);
+            if (item != null)
+            {
+                _context.InventoryItems.Remove(item);
+                await _context.SaveChangesAsync();
+            }
         }
 
-        private void AddActivity(StoreData data, string action, string item, int qty, string status)
+        private void AddActivity(string action, string itemText, int qty, string status)
         {
-            data.RecentActivity.Insert(0, new ActivityLogEntry {
+            var entry = new ActivityLogEntry {
                 Id = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
                 Action = action,
-                Item = item,
+                Item = itemText,
                 Qty = qty,
                 Status = status,
                 Time = "Just now"
-            });
-            if (data.RecentActivity.Count > 10) data.RecentActivity.RemoveAt(10);
+            };
+            
+            _context.ActivityLogs.Add(entry);
+            
+            var count = _context.ActivityLogs.Count();
+            if (count >= 10)
+            {
+                var oldest = _context.ActivityLogs.OrderBy(a => a.Id).First();
+                _context.ActivityLogs.Remove(oldest);
+            }
         }
     }
 }
